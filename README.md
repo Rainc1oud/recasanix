@@ -3,6 +3,12 @@
 ReCasaNix is a NixOS spin of [ReCasaOS](https://github.com/EdmundFu-233/ReCasaOS): a semi-embedded,
 image-based OS for a NAS appliance, built reproducibly from a Nix flake.
 
+## Status
+
+> :warning: Pre-alpha/development. Currently this is a PoC on how to leverage (Re)CasaOS
+> prior art while gaining the unique advantages (reproducibility, stability, maintainability)
+> that NixOS-base offers in comparison with Debian-base.
+
 ## Origin
 
 - [CasaOS](https://github.com/IceWhaleTech/CasaOS) is a web UI and app/device management layer for
