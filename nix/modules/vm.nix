@@ -53,7 +53,14 @@
       # runner creates and that outlives rebuilds of the VM, like the `state` partition of the hardware
       # image. autoFormat creates its ext4 filesystem on the first boot.
       qemu.drives = lib.mkAfter [
-        # after the blank data disk, so that stays /dev/vdb
+        # The data disk first, so it is /dev/vdb: 8 GiB, persistent like a NAS's data disk (the runner
+        # creates it next to the state disk; `--fresh-data` blanks it). Nothing is created on it — make
+        # the pool from the UI or by hand (see modules/storage.nix).
+        {
+          name = "recasanix-data";
+          file = ''"$RECASANIX_DATA_IMAGE"'';
+          deviceExtraOpts.serial = "recasanix-data";
+        }
         {
           name = "recasanix-state";
           file = ''"$RECASANIX_STATE_IMAGE"'';
@@ -61,10 +68,8 @@
         }
       ];
 
-      # One blank 8 GB virtio disk (/dev/vdb) for a pool: nothing is created on it — make the pool by
-      # hand (see modules/storage.nix). A mirror is covered by the storage check (T3), which has its own
-      # machines; add a second entry here to try one in the dev VM.
-      emptyDiskImages = [ 8192 ];
+      # A mirror is covered by the storage check (T3), which has its own machines; add a second data
+      # drive above (and create it in nix/vm-runner.nix) to try one in the dev VM.
 
       # Headless by default: serial console on stdio, so an agent (or a plain terminal) can drive it.
       graphics = false;

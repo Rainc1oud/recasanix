@@ -732,7 +732,7 @@ exposed as `packages.x86_64-linux.vm` (a `runVM` script) and `apps.x86_64-linux.
 *As built (4.1)* — `nix/modules/vm.nix` (everything under `virtualisation.vmVariant`, so the hardware
 closure is untouched) and `nix/vm-runner.nix`; `nix run .#vm` / `packages.x86_64-linux.vm`:
 
-- 4 GB, 4 vCPU, OVMF + systemd-boot, one blank 8 GB virtio disk (`/dev/vdb`), serial console,
+- 4 GB, 4 vCPU, OVMF + systemd-boot, one 8 GB virtio data disk (`/dev/vdb`, persistent), serial console,
   forwards 8080→80 and 2222→22. Measured here with KVM: login prompt after ~12 s; `curl localhost:8080`
   returns the UI, `/v1/sys/utilization` answers 401, all five units active, `systemctl is-system-running`
   is `running`, and a RAID1 pool created with `mkfs.btrfs` on the two disks is mounted by label on first use.
@@ -746,7 +746,8 @@ closure is untouched) and `nix/vm-runner.nix`; `nix run .#vm` / `packages.x86_64
   generation and would otherwise keep booting the old one; `--fresh` resets it by hand, and `fsck.repair=yes`
   repairs it at boot if damaged), and (since 3.2) the **state disk** `recasanix-state.qcow2`
   — accounts, ReCasaOS data and config, SSH host keys — which survives VM rebuilds (delete it for a factory-fresh VM).
-  The blank data disk is recreated per run: `/dev/vdb`; the state disk is `/dev/disk/by-id/virtio-recasanix-state`.
+  The data disk `recasanix-data.qcow2` (8 GB, `/dev/vdb`) persists in the same directory, so a pool made on it
+  survives runs (`--fresh-data` blanks it); the state disk is `/dev/disk/by-id/virtio-recasanix-state`.
 - Quit QEMU with `Ctrl-A x`.
 - First login: create the administrator inside the VM with `recasanix-user-admin bootstrap` (see 3.1 notes).
 
