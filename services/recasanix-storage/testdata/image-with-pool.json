@@ -1,0 +1,11 @@
+{"blockdevices": [
+  {"name":"nvme0n1","path":"/dev/nvme0n1","type":"disk","size":34359738368,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":"QEMU NVMe Ctrl","serial":"recasanix0","tran":"nvme","rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null,
+   "children":[
+    {"name":"nvme0n1p1","path":"/dev/nvme0n1p1","type":"part","size":536870912,"fstype":"vfat","label":"recasa-esp","uuid":"DEAD-BEEF","mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null},
+    {"name":"nvme0n1p2","path":"/dev/nvme0n1p2","type":"part","size":8589934592,"fstype":"ext4","label":"recasanix-root-a","uuid":"0e4e078e-d156-41d5-ab96-9095b6b0f5b7","mountpoints":["/nix/store","/"],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":8400000000,"fsavail":5900000000,"fsused":2500000000},
+    {"name":"nvme0n1p3","path":"/dev/nvme0n1p3","type":"part","size":8589934592,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null},
+    {"name":"nvme0n1p4","path":"/dev/nvme0n1p4","type":"part","size":4294967296,"fstype":"ext4","label":"recasanix-state","uuid":"be6595b1-70b2-4c1e-a455-2693510a426f","mountpoints":["/var/lib/recasanix/state","/etc/casaos","/var/lib/casaos"],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":4200000000,"fsavail":4100000000,"fsused":100000000},
+    {"name":"nvme0n1p5","path":"/dev/nvme0n1p5","type":"part","size":12345678848,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null}
+   ]},
+  {"name":"sda","path":"/dev/sda","type":"disk","size":8589934592,"serial":"recasanix-data1","fstype":"btrfs","label":"recasanix-data","uuid":"7c9e1b2a-0000-4000-8000-000000000001","mountpoints":["/DATA","/var/lib/recasanix/data"],"model":"QEMU HARDDISK","tran":"sata","rota":true,"rm":false,"fssize":8589934592,"fsavail":8500000000,"fsused":89934592}
+]}

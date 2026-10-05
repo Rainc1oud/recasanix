@@ -1,0 +1,60 @@
+--- a/src/components/TopBar.vue
++++ b/src/components/TopBar.vue
+@@ -305,19 +305,11 @@
+ 		 **************************************************/
+ 
+     /**
+-     * @description: Get Version info
++     * @description: ReCasaNix: in-place updates are vendor-managed images; no version query and no
++     * update banner (docs/upstream-exclusions.md). Was: get version info.
+      * @return {*} void
+      */
+-    checkVersion() {
+-      this.$api.sys.getVersion().then((res) => {
+-        if (res.data.success === 200) {
+-          this.updateInfo = res.data.data
+-          if (res.data.data.need_update) {
+-            this.$messageBus('dashboardsetting_versionavailable_show', true.toString())
+-          }
+-        }
+-      })
+-    },
++    checkVersion() {},
+ 
+     /**
+      * @description: Open Update Modal
+@@ -734,34 +726,6 @@
+           </div>
+           <!-- Automount USB Drive End  -->
+ 
+-          <!-- Update Start -->
+-          <div class="_is-large hover-effect _is-radius pr-2 mr-4 ml-4">
+-            <div class="is-flex is-align-items-center">
+-              <div class="is-flex is-align-items-center is-flex-grow-1 _is-normal">
+-                <b-icon class="mr-1 ml-2" icon="update-outline" pack="casa" size="is-20" />
+-                <div :class="{ 'update-text-dot': updateInfo.need_update }">
+-                  {{ $t("Update") }}
+-                </div>
+-              </div>
+-              <div class="_has-text-gray">
+-                v{{ updateInfo.current_version }}
+-              </div>
+-            </div>
+-
+-            <div v-if="!updateInfo.need_update" class="is-flex is-align-items-center pl-55 ml-1 is-size-7">
+-              {{ $t(latestText) }}
+-              <b-icon class="ml-1" custom-size="mdi-18px" icon="check" type="is-success" />
+-            </div>
+-            <div v-else class="is-flex is-align-items-center is-justify-content-end update-container pl-5">
+-              <div class="is-flex-grow-1 is-size-7">
+-                {{ $t(updateText) }}
+-              </div>
+-              <b-button class="ml-2" rounded size="is-small" type="is-dark" @click="showUpdateModal">
+-                {{ $t("Update") }}
+-              </b-button>
+-            </div>
+-          </div>
+-          <!-- Update End -->
+           <!-- Restart or Shutdown Start -->
+           <div
+             class="is-flex is-align-content-center is-justify-content-center _footer mt-4 pl-3 pr-3 pt-2 pb-2"

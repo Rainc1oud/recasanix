@@ -1,0 +1,11 @@
+{"blockdevices": [
+  {"name":"loop0","path":"/dev/loop0","type":"loop","size":0,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null},
+  {"name":"sr0","path":"/dev/sr0","type":"rom","size":1073741312,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":"QEMU DVD-ROM","serial":"QM00005","tran":"sata","rota":true,"rm":true,"fssize":null,"fsavail":null,"fsused":null},
+  {"name":"vda","path":"/dev/vda","type":"disk","size":2684354560,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null,
+   "children":[
+    {"name":"vda1","path":"/dev/vda1","type":"part","size":104857600,"fstype":"vfat","label":"ESP","uuid":"ABCD-1234","mountpoints":["/boot"],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":104857600,"fsavail":98000000,"fsused":6857600},
+    {"name":"vda2","path":"/dev/vda2","type":"part","size":2579496960,"fstype":"ext4","label":"nixos","uuid":"11111111-2222-3333-4444-555555555555","mountpoints":["/nix/store","/"],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":2500000000,"fsavail":500000000,"fsused":2000000000}
+   ]},
+  {"name":"vdb","path":"/dev/vdb","type":"disk","size":8589934592,"fstype":null,"label":null,"uuid":null,"mountpoints":[null],"model":null,"serial":null,"tran":null,"rota":false,"rm":false,"fssize":null,"fsavail":null,"fsused":null},
+  {"name":"vdc","path":"/dev/vdc","type":"disk","size":2147483648,"serial":"recasanix-state","fstype":"ext4","label":"recasanix-state","uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","mountpoints":["/var/lib/recasanix/state","/etc/casaos","/var/lib/casaos"],"model":null,"tran":null,"rota":false,"rm":false,"fssize":2000000000,"fsavail":1900000000,"fsused":100000000}
+]}

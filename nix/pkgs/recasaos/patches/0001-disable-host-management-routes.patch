@@ -1,0 +1,42 @@
+--- a/route/v1.go
++++ b/route/v1.go
+@@ -44,10 +44,10 @@
+ 		v1SysGroup.Use()
+ 		{
+ 			v1SysGroup.GET("/debug", v1.GetSystemConfigDebug)
++			// ReCasaNix (docs/upstream-exclusions.md): GET /version stays — the UI calls it right after login —
++			// but no longer asks the network; POST /update (self-update) and POST /stop (self-kill) are removed.
+ 			v1SysGroup.GET("/version", v1.GetSystemCheckVersion) // version/check
+ 
+-			v1SysGroup.POST("/update", v1.SystemUpdate)
+-
+ 			v1SysGroup.GET("/hardware", v1.GetSystemHardwareInfo) // hardware/info
+ 
+ 			v1SysGroup.GET("/wsssh", v1.WsSsh)
+@@ -58,8 +58,6 @@
+ 			// v1SysGroup.GET("/widget/config", v1.GetWidgetConfig)//delete
+ 			// v1SysGroup.POST("/widget/config", v1.PostSetWidgetConfig)//delete
+ 
+-			v1SysGroup.POST("/stop", v1.PostKillCasaOS)
+-
+ 			v1SysGroup.GET("/utilization", v1.GetSystemUtilization)
+ 			// v1SysGroup.GET("/cpu", v1.GetSystemCupInfo)
+ 			// v1SysGroup.GET("/mem", v1.GetSystemMemInfo)
+--- a/route/v1/system.go
++++ b/route/v1/system.go
+@@ -41,10 +41,12 @@
+ // @Success 200 {string} string "ok"
+ // @Router /sys/version/check [get]
+ func GetSystemCheckVersion(ctx echo.Context) error {
+-	need, version := version.IsNeedUpdate(service.MyService.Casa().GetCasaosVersion())
++	// ReCasaNix: updates are whole-image and vendor-managed, so there is nothing to check over the network
++	// (upstream queried GitHub here). The UI still calls this right after login and only needs the
++	// running version and need_update=false.
+ 	data := make(map[string]interface{}, 3)
+-	data["need_update"] = need
+-	data["version"] = version
++	data["need_update"] = false
++	data["version"] = map[string]interface{}{}
+ 	data["current_version"] = common.VERSION
+ 	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: data})
+ }

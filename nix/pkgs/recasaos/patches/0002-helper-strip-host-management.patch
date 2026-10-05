@@ -1,0 +1,178 @@
+--- a/build/sysroot/usr/share/casaos/shell/helper.sh	2026-09-20 21:41:59.208021277 +0200
++++ b/build/sysroot/usr/share/casaos/shell/helper.sh	2026-09-20 21:42:20.588596625 +0200
+@@ -158,9 +158,7 @@
+ }
+ 
+ #重载samba服务
+-ReloadSamba() {
+-  /etc/init.d/smbd reload
+-}
++# ReloadSamba: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+ # $1=sda1
+ # $2=volume{1}
+@@ -217,7 +215,7 @@
+     mount -t iso9660 ${DEVICE} ${MOUNT_POINT}
+     ;;
+   *)
+-    /bin/rmdir "${MOUNT_POINT}"
++    rmdir "${MOUNT_POINT}"
+     exit 0
+     ;;
+   esac
+@@ -233,11 +231,11 @@
+   if [[ -z ${MOUNT_POINT} ]]; then
+     ${log} "Warning: ${DEVICE} is not mounted"
+   else
+-    /bin/kill -9 $(lsof ${MOUNT_POINT})
++    kill -9 $(lsof ${MOUNT_POINT})
+     umount -l ${DEVICE}
+     ${log} "Unmounted ${DEVICE} from ${MOUNT_POINT}"
+     if [ "`ls -A ${MOUNT_POINT}`" = "" ]; then
+-      /bin/rm -fr "${MOUNT_POINT}"
++      rm -fr "${MOUNT_POINT}"
+     fi
+     
+     sed -i.bak "\@${MOUNT_POINT}@d" /var/log/usb-mount.track
+@@ -246,90 +244,23 @@
+ }
+ # $1=/mnt/volume1/data.img
+ # $2=100G
+-PackageDocker() {
+-  image=$1
+-  docker="/mnt/casa_docker"
+-  #判断目录docker存在不存在则创建,存在检查是否为空
+-
+-  if [ ! -d "$docker" ]; then
+-    mkdir ${docker}
+-  fi
+-
+-  if [ "$(ls -A $docker)" = "" ]; then
+-    echo "$docker count is 0"
+-  else
+-    mkdir ${docker}_bak
+-    mv -r ${docker} ${docker}_bak
+-  fi
++# PackageDocker: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+-  daemon="/etc/docker/daemon.json"
+-  #1创建img文件在挂载的目录
+-  fallocate -l $2 $image
+-  #2初始化img文件
+-  mkfs -t ext4 $image
+-  #3挂载img文件
+-  sudo mount -o loop $image $docker
+-  #4给移动/var/lib/docker数据到img挂载的目录
+-  systemctl stop docker.socket
+-  systemctl stop docker
+-  cp -r /var/lib/docker/* ${docker}/
+-  #5在/etc/docker写入daemon.json(需要检查)
+-  if [ -d "$daemon" ]; then
+-    mv -r $daemon ${daemon}.bak
+-  fi
+-  echo "{\"data-root\": \"$docker\"}" >$daemon
+-  #删除老数据腾出空间
+-  #rm -fr /var/lib/docker
+-  systemctl start docker.socket
+-  systemctl start docker
+-}
+-
+-DockerImgMove() {
+-  image=$1
+-  systemctl stop docker.socket
+-  systemctl stop docker
+-  sudo umount -f $image
+-}
++# DockerImgMove: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+ GetDockerDataRoot() {
+   docker info | grep "Docker Root Dir:"
+ }
+ 
+-SetLink() {
+-  ln -s /mnt/casa_sda1/AppData /DATA/AppData
+-  #删除所有软链
+-  find /DATA -type l -delete
+-}
++# SetLink: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+ #压缩文件夹
+ 
+-TarFolder() {
+-  #压缩
+-  tar -zcvf data.tar.gz -C/DATA/ AppDataBak/
+-
+-  #解压
+-  tar zxvf data.tar.gz 
++# TarFolder: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+-  #查看某文件夹下的所有包括子文件夹文件
+-  ls /DATA/Media -lR | grep "^-" | wc -l
+-  # ls -lR|grep "^d"| wc -l 查看某个文件夹下文件夹的个数，包括子文件夹下的文件夹个数。
++# USB_Start_Auto: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+-  #查看固定文件夹大小
+-  du -sh /DATA
+-}
+-
+-USB_Start_Auto() {
+-  ((EUID)) && sudo_cmd="sudo"
+-  $sudo_cmd systemctl enable devmon@devmon
+-  $sudo_cmd systemctl start devmon@devmon
+-}
+-
+-USB_Stop_Auto() {
+-  ((EUID)) && sudo_cmd="sudo"
+-  $sudo_cmd systemctl stop devmon@devmon
+-  $sudo_cmd systemctl disable devmon@devmon
+-  $sudo_cmd udevil clean
+-}
++# USB_Stop_Auto: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+ GetDeviceTree(){  
+   cat /proc/device-tree/model
+@@ -341,17 +272,9 @@
+ }
+ 
+ # edit user password $1:username
+-EditSmabaUserPassword(){
+-  $sudo_cmd smbpasswd $1
+-}
++# EditSmabaUserPassword: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+-AddSmabaUser(){
+-  $sudo_cmd useradd $1
+-  $sudo_cmd smbpasswd -a $1 <<EOF
+-    $2
+-    $2
+-EOF
+-}
++# AddSmabaUser: removed for ReCasaNix (docs/upstream-exclusions.md)
+ 
+ # $1:username $2:host $3:share $4:port $5:mountpoint $6:password 
+ MountCIFS(){
+--- a/build/sysroot/usr/share/casaos/shell/usb-mount.sh	2026-09-20 21:41:59.208088585 +0200
++++ b/build/sysroot/usr/share/casaos/shell/usb-mount.sh	2026-09-20 21:42:20.588788971 +0200
+@@ -101,7 +101,7 @@
+     mount -t iso9660 ${DEVICE} ${MOUNT_POINT}
+     ;;
+   *)
+-    /bin/rmdir "${MOUNT_POINT}"
++    rmdir "${MOUNT_POINT}"
+     exit 0
+     ;;
+   esac
+@@ -112,11 +112,11 @@
+   if [[ -z ${MOUNT_POINT} ]]; then
+     ${log} "Warning: ${DEVICE} is not mounted"
+   else
+-    #/bin/kill -9 $(lsof ${MOUNT_POINT})
++    #kill -9 $(lsof ${MOUNT_POINT})
+     umount -l ${DEVICE}
+     ${log} "Unmounted ${DEVICE} from ${MOUNT_POINT}"
+     if [ "`ls -A ${MOUNT_POINT}`" = "" ]; then
+-      /bin/rm -fr "${MOUNT_POINT}"
++      rm -fr "${MOUNT_POINT}"
+     fi
+     sed -i.bak "\@${MOUNT_POINT}@d" /var/log/usb-mount.track
+   fi

@@ -1,0 +1,17 @@
+The storage manager's "create" request ends in `.finaly(...)` — a typo for `.finally`. Calling it throws
+a TypeError, so `isCreating` is never reset: whenever creating a storage fails (and with the read-only
+storage manager it always does, on purpose) the panel stays on "Creation in progress..." for good and
+the user has no way back except closing it. With the typo fixed the panel returns to the form after the
+error toast, which is what the toast's message is for.
+
+--- a/src/components/Storage/StorageManagerPanel.vue
++++ b/src/components/Storage/StorageManagerPanel.vue
+@@ -539,7 +539,7 @@
+ 					type: 'is-danger'
+ 				})
+ 				console.error(err)
+-			}).finaly(() => {
++			}).finally(() => {
+ 				this.isCreating = false
+ 			})
+ 		},

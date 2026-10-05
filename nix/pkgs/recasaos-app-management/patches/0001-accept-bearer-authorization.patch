@@ -1,0 +1,36 @@
+--- a/route/v1.go
++++ b/route/v1.go
+@@ -52,7 +52,7 @@
+ 		TokenLookupFuncs: []echo_middleware.ValuesExtractor{
+ 			func(c echo.Context) ([]string, error) {
+ 				if len(c.Request().Header.Get(echo.HeaderAuthorization)) > 0 {
+-					return []string{c.Request().Header.Get(echo.HeaderAuthorization)}, nil
++					return []string{authorizationToken(c.Request().Header.Get(echo.HeaderAuthorization))}, nil
+ 				}
+ 				return []string{c.QueryParam("token")}, nil
+ 			},
+--- a/route/v2.go
++++ b/route/v2.go
+@@ -78,7 +78,7 @@
+ 		},
+ 		TokenLookupFuncs: []echo_middleware.ValuesExtractor{
+ 			func(c echo.Context) ([]string, error) {
+-				return []string{c.Request().Header.Get(echo.HeaderAuthorization)}, nil
++				return []string{authorizationToken(c.Request().Header.Get(echo.HeaderAuthorization))}, nil
+ 			},
+ 		},
+ 	}))
+--- /dev/null
++++ b/route/token_header.go
+@@ -0,0 +1,11 @@
++package route
++
++import "strings"
++
++// authorizationToken returns the token carried by an Authorization header value. The standard form is
++// `Bearer <token>` (what the ReCasaOS root service and the current UI use); the bare token is still
++// accepted, as before. ReCasaNix (docs/upstream-exclusions.md): without this, a UI that satisfies the
++// root service (Bearer) is rejected here, and one that satisfies this service (bare) is rejected there.
++func authorizationToken(header string) string {
++	return strings.TrimPrefix(header, "Bearer ")
++}

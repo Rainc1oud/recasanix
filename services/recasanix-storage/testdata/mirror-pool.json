@@ -1,0 +1,4 @@
+{"blockdevices": [
+  {"name":"sda","path":"/dev/sda","type":"disk","size":8589934592,"serial":"recasanix-data2","fstype":"btrfs","label":"recasanix-data","uuid":"7c9e1b2a-0000-4000-8000-000000000002","mountpoints":[null],"model":"QEMU HARDDISK","tran":"sata","rota":true,"rm":false,"fssize":null,"fsavail":null,"fsused":null},
+  {"name":"sdb","path":"/dev/sdb","type":"disk","size":8589934592,"serial":"recasanix-data1","fstype":"btrfs","label":"recasanix-data","uuid":"7c9e1b2a-0000-4000-8000-000000000002","mountpoints":["/DATA","/var/lib/recasanix/data"],"model":"QEMU HARDDISK","tran":"sata","rota":true,"rm":false,"fssize":8589934592,"fsavail":8000000000,"fsused":589934592}
+]}

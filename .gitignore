@@ -1,0 +1,4 @@
+.direnv/
+/services/recasanix-storage/recasanix-storage
+/recasanix-efi-vars.fd
+/.pre-commit-config.yaml

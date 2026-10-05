@@ -1,0 +1,15 @@
+# Backstop for the dev shell's pre-commit hook: the committed admin-authorized-keys must stay an
+# empty template (comments and blank lines only), whoever pushes and however.
+name: no-admin-keys
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: committed admin-authorized-keys holds no keys
+        run: |
+          if grep -nvE '^[[:space:]]*(#|$)' nix/hosts/admin-authorized-keys; then
+            echo "::error file=nix/hosts/admin-authorized-keys::SSH keys must not be committed (working copy only)"
+            exit 1
+          fi

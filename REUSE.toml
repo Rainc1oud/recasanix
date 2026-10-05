@@ -1,0 +1,13 @@
+# Licensing per file (https://reuse.software). Later annotations take precedence.
+version = 1
+
+# Default: our Nix glue, modules, services, tests and docs.
+[[annotations]]
+path = "**"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Patches against upstream ReCasaOS components keep the upstream licence, so they can be
+# submitted upstream unchanged.
+[[annotations]]
+path = "nix/pkgs/**/patches/**"
+SPDX-License-Identifier = "Apache-2.0"
