@@ -9,6 +9,9 @@
     boot.kernelParams = [
       "console=tty0"
       "console=ttyS0,115200n8"
+      # The root disk is disposable (the runner recreates it), so let the initrd's fsck repair a damaged
+      # root filesystem instead of stopping in the (locked) emergency shell.
+      "fsck.repair=yes"
     ];
     boot.loader.timeout = 0;
 

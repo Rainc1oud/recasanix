@@ -1,0 +1,7 @@
+# SSH public keys allowed to log in as the bootstrap administrator of the hardware image — one per
+# line, blank lines and '#' comments ignored. SSH is key-only and the image ships no password, so with
+# no key the flashed device cannot be logged in to.
+#
+# This committed file is an empty template: add your key to your WORKING COPY only and rebuild
+# `.#image` — Nix reads tracked files from the working copy. Never commit a key: the dev shell's
+# pre-commit hook refuses it, and CI rejects it (see docs/flashing.md).

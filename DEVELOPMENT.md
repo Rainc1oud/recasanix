@@ -740,9 +740,11 @@ closure is untouched) and `nix/vm-runner.nix`; `nix run .#vm` / `packages.x86_64
   variant sets `console=ttyS0,115200n8` itself and `boot.loader.timeout = 0` (otherwise a silent serial
   console and a 5 s boot menu).
 - Development conveniences, confined to the VM variant: ssh password login (the well-known console password
-  `recasanix`; the appliance itself stays key-only). Two disks persist across runs under `~/.local/state/recasanix-vm/`: the
+  `recasanix`; the appliance itself stays key-only). Two disks persist across runs under `~/.local/state/recasanix-vm/<checkout>-<hash>/` (one directory per clone,
+  overridable with `RECASANIX_VM_DIR`): the
   root disk `recasanix.qcow2`, which the runner **resets whenever the VM definition changes** (it holds the installed
-  generation and would otherwise keep booting the old one), and (since 3.2) the **state disk** `recasanix-state.qcow2`
+  generation and would otherwise keep booting the old one; `--fresh` resets it by hand, and `fsck.repair=yes`
+  repairs it at boot if damaged), and (since 3.2) the **state disk** `recasanix-state.qcow2`
   — accounts, ReCasaOS data and config, SSH host keys — which survives VM rebuilds (delete it for a factory-fresh VM).
   The blank data disk is recreated per run: `/dev/vdb`; the state disk is `/dev/disk/by-id/virtio-recasanix-state`.
 - Quit QEMU with `Ctrl-A x`.

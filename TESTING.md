@@ -23,7 +23,7 @@ The console is on your terminal; quit QEMU with `Ctrl-A x`. Then:
 | SSH | `ssh -p 2222 admin@localhost` — password `recasanix` (development only) |
 | First run | in the VM: `sudo recasanix-user-admin bootstrap` — creates the UI administrator, then log in to the UI |
 | Data disk | `/dev/vdb`, blank — apps need a pool on it, see below |
-| Reset | `rm -rf ~/.local/state/recasanix-vm` gives a factory-fresh VM (disks and hot state live there) |
+| Reset | `nix run .#vm -- --fresh` resets the root disk; `rm -rf ~/.local/state/recasanix-vm/<checkout>-<hash>` (shown in the banner) gives a factory-fresh VM. Each clone has its own disks. |
 
 Anything the runner prints on your terminal is wiped a moment later, when the UEFI firmware clears the
 screen. The same hints are shown when you log in (the message of the day), and are repeated here.
