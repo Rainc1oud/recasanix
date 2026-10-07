@@ -532,6 +532,7 @@ UI's unfree allowance in `pkgs` (the flake's `recasanix-vm` and the tests provid
 - T2 covers it end to end: status `initialized:false` → 410 on register → bootstrap → `initialized:true`,
   credential sources gone, replay rejected → login → authenticated API 200 → the removed self-update and
   self-kill routes answer 404/405.
+
 ### 3.2 — Cold/hot state boundary
 
 **Deliverable**: a documented, implemented split — plus a `## State boundary` section appended to
@@ -1039,6 +1040,10 @@ loopback, or a connection that really arrived on the bus's root-only unix socket
   event types, and the bus logged no 401;
 - loopback without / with a wrong credential, `Host: unix` (direct, through the gateway, and from the LAN
   address — pinned upstream answered **200 with every event type** there), and the socket as `nobody` are refused;
+- a browser's WebSocket subscription needs a one-use ticket (`POST /v2/message_bus/ticket` sets an HttpOnly,
+  SameSite=Strict cookie the handshake redeems): none → 401, ticket → 101, replay → 401 (message-bus patches
+  0007–0008; the dashboard side, UI patch 0009, is asserted by T10, which requires frames on the socket.io
+  subscription);
 - `PUT /v1/sys/state/off` ends in a `systemctl poweroff` requested by `casaos.service`, and the VM powers off.
 
 The code is a stacked series of upstream PRs to EdmundFu-233's repositories, carried as patches until merged

@@ -31,6 +31,7 @@ stdenv.mkDerivation (finalAttrs: {
     ./patches/0006-chore-ui-drop-the-IceWhale-community-links-and-the-b.patch
     ./patches/0007-fix-shares-never-ask-for-an-anonymous-share.patch
     ./patches/0008-feat-shares-share-accounts-and-who-may-open-a-share.patch
+    ./patches/0009-feat-events-subscribe-to-the-message-bus-with-a-tick.patch
   ];
 
   nativeBuildInputs = [

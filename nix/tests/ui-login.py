@@ -13,6 +13,12 @@ from playwright.sync_api import sync_playwright
 
 base, user, password = sys.argv[1:4]
 log = []
+bus_frames = []  # frames received on the dashboard's socket.io subscription to the message bus
+
+
+def on_websocket(ws):
+    if "/v2/message_bus/socket.io/" in ws.url:
+        ws.on("framereceived", lambda frame: bus_frames.append(str(frame)[:80]))
 
 # The login form is re-rendered while the page settles, so set the values and press the button from
 # inside the page instead of racing the layout.
@@ -28,6 +34,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 1400, "height": 900})
     page.on("response", lambda r: log.append((r.request.method, r.status, r.url.replace(base, ""))))
     page.on("console", lambda m: log.append(("console", m.type, m.text[:200])))
+    page.on("websocket", on_websocket)
 
     page.goto(base + "/")
     page.wait_for_selector("input[type=text]", timeout=30000)
@@ -45,6 +52,7 @@ unauthorized = [e for e in log if e[0] != "console" and e[1] == 401]
 print("final url:", url)
 print("localStorage keys:", sorted(storage))
 print("401s:", unauthorized)
+print("message bus frames:", len(bus_frames))
 
 failed = []
 if url.rstrip("/").endswith("#/login"):
@@ -53,6 +61,10 @@ if not storage.get("access_token"):
     failed.append("no access_token left in localStorage")
 if unauthorized:
     failed.append(f"{len(unauthorized)} request(s) answered 401")
+# the subscription is authenticated with a one-use ticket (message-bus patches 0007-0008, UI 0009):
+# without one the bus refuses the handshake and the dashboard silently gets no events
+if not bus_frames:
+    failed.append("no message bus subscription: the socket.io WebSocket never received a frame")
 
 if failed:
     print("FAILED:", "; ".join(failed))

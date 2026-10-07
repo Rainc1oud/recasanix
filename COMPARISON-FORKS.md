@@ -124,12 +124,35 @@ Branches local in `~/devel/github.com/ppenguin/ReCasaOS-EF/<repo>-EF` (forks `pp
 | — | ReCasaOS | `fix/systemd-power-actions` | `systemctl --no-block reboot\|poweroff`, failures → 500 (ported, credited alvins82) | — | 2 |
 | — | MessageBus | `fix/subscriptions-before-start` | startup races: subscription made before `Start` wiped (YSK cards stop updating), publish before `Start` → nil-ctx panic; ysk tests poll instead of sleeping (flaked under `nix flake check`) | — (put first: carried as 0002–0003) | — |
 | — | UI | `chore/remove-upstream-community-links` | drop IceWhale Discord/GitHub/feedback/share/wiki/awesome links; drop blog news feed (sent `baseinfo.conf` device ids to `blog-casaos.zimaspace.com`) | — | — |
+| T-1 | MessageBus | `feat/subscription-tickets` | `POST /v2/message_bus/ticket` → one-use, 30 s, user+UA-bound, HttpOnly, SameSite=Strict, path-scoped cookie redeemed by the WebSocket handshake (EF's SSH-terminal pattern); exemption kept | 3 (stacked) | — |
+| T-2 | UI | `feat/bus-subscription-ticket` | socket.io: websocket-only, fetch a ticket before every (re)connect | T-1 deployed | — |
+| T-3 | MessageBus | `fix/subscriptions-need-a-ticket` | remove the unauthenticated WebSocket exemption | T-1 (stacked), T-2 merged | — |
 | S-A | ReCasaOS | `feat/samba-external-main-config` | `[server] SambaMainConfig = external`: main smb.conf owned by the host (never read/written; NixOS symlink broke every share op), only `smb.casa.conf` managed; reconcile checks the include | — | 3 |
 | S-B | ReCasaOS | `feat/samba-share-accounts` | share accounts (`/v1/samba/users`, nologin, GECOS marker, stdin passwords), per-share `valid users` + `force user`, directory handed to the account via pinned-root fchown (ported from ORG 5a7c55c/20df217) | S-A (stacked) | 3 |
 | S-C0 | UI | `fix/shares-never-anonymous` | all three share entry points posted `anonymous: true`, which the root service refuses → sharing from the dashboard always failed | — | 3 |
 | S-C | UI | `feat/share-accounts-ui` | Share accounts dialog (ported from ORG), "who may open this folder" on Share and a new "Access" item (adapted: no guest/Time Machine) | S-C0 (stacked); S-B deployed | 3 |
 
 - Design: reuses EF's existing per-start `gateway.token` (gateway management API already requires it) instead of ORG's new `internal.secret` → no new file/scheme upstream.
-- **#1 is a security fix with a confirmed exploit** on pinned upstream (LAN client + `Host: unix` through the gateway → 200, full bus API) → report privately (GitHub security advisory) before opening PR 1 publicly.
-- Not in series: websocket subscribe still unauthenticated (needs UI + query-token, conflicts EF policy → discuss upstream first); our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
+- **#1 is a security fix with a confirmed exploit** on pinned upstream (LAN client + `Host: unix` through the gateway → 200, full bus API). Pre-alpha everywhere → plain public PR (owner decision 2026-10-07).
+- Websocket subscriptions: T-1..T-3 (tickets instead of URL tokens, which EF refuses). Not in series: our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
 - Harvest #3 (Samba account shares): S-A, S-B, S-C0, S-C done, verified by T13 (backend, smbclient) and T14 (browser). Open: EF's *managed* main template still has `map to guest = bad user` (a refused login is denied instead of prompted) → follow-up PR, needs a managed-template migration. EF UI drops the whole app grid (built-in Files included) when the app-grid request fails → follow-up PR.
+
+### Open upstream PRs (2026-10-07)
+
+- MessageBus startup races: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/3
+- MessageBus unix-socket identity (Host: unix): https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/4
+- ReCasaOS service credential: https://github.com/EdmundFu-233/ReCasaOS/pull/151
+- UserService service credential: https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/19
+- AppManagement service credential: https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/5
+- UI register-ui-events credential: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/6
+- MessageBus loopback needs credential: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/5
+- AppManagement loopback needs credential: https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/6
+- ReCasaOS power actions: https://github.com/EdmundFu-233/ReCasaOS/pull/152
+- UI drop IceWhale links / news feed: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/7
+- S-A include-only mode: https://github.com/EdmundFu-233/ReCasaOS/pull/153
+- S-B share accounts: https://github.com/EdmundFu-233/ReCasaOS/pull/154
+- S-C0 shares never anonymous: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/8
+- S-C share accounts UI: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/9
+- T-1 subscription tickets: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/6
+- T-2 UI ticket: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/10
+- T-3 subscriptions need a ticket: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/7

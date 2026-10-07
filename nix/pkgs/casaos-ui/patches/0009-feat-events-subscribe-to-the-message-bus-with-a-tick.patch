@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 18:10:28 +0200
+Subject: [PATCH] feat(events): subscribe to the message bus with a ticket
+
+The dashboard opened its socket.io subscription without any credential,
+because a browser cannot set an Authorization header on a WebSocket; the
+message bus let every WebSocket handshake through for that reason.
+
+It now asks the bus for a one-use ticket first (POST
+/v2/message_bus/ticket, normal Authorization header; the ticket comes
+back as an HttpOnly, SameSite=Strict cookie scoped to the bus) and then
+opens the socket, whose handshake redeems it. No token ever goes into a
+URL. Consequences:
+- socket.io uses the WebSocket transport only (one handshake; polling
+  would need a ticket per request)
+- socket.io's own reconnection is off (it would reuse a spent ticket);
+  every reconnect fetches a fresh ticket, with backoff, and waits for
+  login first
+
+Needs ReCasaOS-MessageBus "one-use subscription tickets"; lets the bus
+then drop the unauthenticated exemption ("subscriptions need a ticket").
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/main.js                       |  8 ++++-
+ src/service/message_bus_socket.js | 57 +++++++++++++++++++++++++++++++
+ 2 files changed, 64 insertions(+), 1 deletion(-)
+ create mode 100644 src/service/message_bus_socket.js
+
+diff --git a/src/main.js b/src/main.js
+index f363436..fad9d56 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -12,6 +12,7 @@ import Vue2TouchEvents from 'vue2-touch-events'
+ import VueSocialSharing from 'vue-social-sharing'
+ import VueSocketIOExt from 'vue-socket.io-extended';
+ import messageBus from '@/events/index.js'
++import {connectMessageBus} from '@/service/message_bus_socket.js'
+ import VueDOMPurifyHTML from 'vue-dompurify-html'
+ 
+ 
+@@ -32,9 +33,13 @@ const baseIp = isDev ? `${devIp}` : `${localhostName}`
+ const baseURL = isDev ? `${devIp}:${devPort}` : `${localhost}`
+ const wsURL = `${wsProtocol}//${baseURL}`
+ 
++// One WebSocket handshake per connection, authenticated with a one-use ticket
++// (service/message_bus_socket.js); polling would need a ticket per request.
+ const socket = io( {
+-	transports: ['websocket', 'polling'],
++	transports: ['websocket'],
+ 	path: '/v2/message_bus/socket.io/',
++	autoConnect: false,
++	reconnection: false,
+ });
+ 
+ Vue.use(Buefy)
+@@ -42,6 +47,7 @@ Vue.use(VueFullscreen)
+ Vue.use(VAnimateCss, { animateCSSPath: '/css/animate.min.css' });
+ Vue.use(Vue2TouchEvents)
+ Vue.use(VueSocketIOExt, socket);
++connectMessageBus(socket);
+ Vue.use(VueSocialSharing);
+ Vue.use(VueDOMPurifyHTML, {
+ 	default: {
+diff --git a/src/service/message_bus_socket.js b/src/service/message_bus_socket.js
+new file mode 100644
+index 0000000..9adb2f0
+--- /dev/null
++++ b/src/service/message_bus_socket.js
+@@ -0,0 +1,57 @@
++import {api} from "./service.js";
++
++// The message bus authenticates a browser's WebSocket subscription with a
++// one-use ticket: POST /v2/message_bus/ticket (with the normal Authorization
++// header) sets it as an HttpOnly cookie, and the next WebSocket handshake
++// redeems it. Browsers cannot put an Authorization header on a WebSocket, and
++// tokens are never sent in URLs. So every (re)connect fetches a fresh ticket
++// first, and socket.io's own reconnection, which would reuse a spent ticket,
++// is replaced by this one.
++
++const MIN_DELAY = 1000
++const MAX_DELAY = 30000
++const SIGNED_OUT_POLL = 2000
++
++export function connectMessageBus(socket) {
++	let delay = MIN_DELAY
++	let timer = null
++
++	const retry = (after) => {
++		clearTimeout(timer)
++		timer = setTimeout(open, after)
++	}
++
++	const backOff = () => {
++		retry(delay)
++		delay = Math.min(delay * 2, MAX_DELAY)
++	}
++
++	async function open() {
++		if (socket.connected) {
++			return
++		}
++		// before login there is nothing to subscribe with
++		if (!localStorage.getItem("access_token")) {
++			retry(SIGNED_OUT_POLL)
++			return
++		}
++		try {
++			await api.post("/v2/message_bus/ticket")
++			socket.open()
++		} catch (e) {
++			backOff()
++		}
++	}
++
++	socket.on("connect", () => {
++		delay = MIN_DELAY
++	})
++	socket.on("connect_error", backOff)
++	socket.on("disconnect", (reason) => {
++		if (reason !== "io client disconnect") {
++			backOff()
++		}
++	})
++
++	open()
++}

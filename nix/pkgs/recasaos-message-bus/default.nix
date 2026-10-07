@@ -16,6 +16,8 @@ mkCasaosGo {
     ./patches/0004-security-route-take-unix-socket-identity-from-the-co.patch
     ./patches/0005-feat-gatewayclient-service-credential-helpers-for-in.patch
     ./patches/0006-security-route-loopback-needs-the-gateway-service-cr.patch
+    ./patches/0007-feat-route-one-use-subscription-tickets-for-browser-.patch
+    ./patches/0008-fix-route-subscriptions-need-a-ticket.patch
   ];
   subPackages = [ "." ];
   renameBinaries.CasaOS-MessageBus = "casaos-message-bus";

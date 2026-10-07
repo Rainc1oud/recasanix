@@ -87,6 +87,30 @@ pkgs.testers.runNixOSTest {
         # and a local process does not get in through the gateway either
         expect("http://localhost/v2/message_bus/event_type", "401")
 
+    # A browser subscribes with a one-use ticket (POST /v2/message_bus/ticket with its token sets an
+    # HttpOnly cookie; the WebSocket handshake redeems it): no subscription without one, and no token in
+    # a URL. message-bus patches 0007-0008.
+    with subtest("message bus: subscriptions need a one-use ticket"):
+        machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
+        machine.wait_for_unit("casaos-user-service.service")
+        token = json.loads(machine.succeed(
+            "curl -s -X POST -H 'Content-Type: application/json' "
+            "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
+        ))["data"]["token"]["access_token"]
+        sio = f"http://{lan}/v2/message_bus/socket.io/?EIO=3&transport=websocket"
+        upgrade = ("--max-time 3 -A recasanix-test -H 'Connection: Upgrade' -H 'Upgrade: websocket' "
+                   "-H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='")
+        def handshake(extra=""):
+            return machine.execute(f"curl -s -o /dev/null -w '%{{http_code}}' {upgrade} {extra} '{sio}'")[1].strip()
+        assert handshake() == "401", "a subscription without a ticket"
+        machine.succeed(
+            f"curl -sf -A recasanix-test -c /tmp/bus.cookies -X POST -H 'Authorization: Bearer {token}' "
+            f"http://{lan}/v2/message_bus/ticket"
+        )
+        machine.succeed("grep -q recasaos_bus_ticket /tmp/bus.cookies")
+        assert handshake("-b /tmp/bus.cookies") == "101", "a ticketed subscription"
+        assert handshake("-b /tmp/bus.cookies") == "401", "a replayed ticket"
+
     with subtest("message bus: the unix socket is root-only"):
         expect("--unix-socket /tmp/message-bus.sock http://unix/v2/message_bus/event_type", "200")
         machine.fail("runuser -u nobody -- curl -sf --unix-socket /tmp/message-bus.sock http://unix/v2/message_bus/event_type")
@@ -101,8 +125,7 @@ pkgs.testers.runNixOSTest {
     # Power: the UI's shutdown button ends in `systemctl poweroff`, and the API says so only when
     # systemd took the job (it used to run SysV `init 0`, which NixOS lacks, and answer 200 anyway).
     with subtest("power off from the API"):
-        machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
-        machine.wait_for_unit("casaos-user-service.service")
+        # (the administrator was bootstrapped above)
         login = json.loads(machine.succeed(
             "curl -s -X POST -H 'Content-Type: application/json' "
             "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
