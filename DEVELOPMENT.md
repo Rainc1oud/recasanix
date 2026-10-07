@@ -846,6 +846,7 @@ GitLab CI later). All of these must run without hardware.
 | T9 | [x] | `checks.<sys>.no-host-management` | Guardrail: no host-management machinery in the closure |
 | T10 | [x] | `checks.<sys>.ui-login` | Headless Chromium logs into the real UI and must stay logged in (no 401s) |
 | T11 | [x] | `checks.<sys>.storage-manager` | Real VM + gateway + UI in a browser: lists disks/volumes, creates storage on a blank disk (UI, then API for JBOD-extend), refuses changes to an existing one, needs a real access token |
+| T12 | [x] | `checks.<sys>.service-auth` | NixOS VM test: service-to-service trust boundary (loopback is not an identity) + UI power-off reaches systemd |
 
 ### T1 — Component unit tests
 
@@ -1024,6 +1025,23 @@ be wrong, algorithm confusion included), the gateway logic and creating storage 
 failure, argument-vector shape) against fixtures, and were mutation-checked: breaking the issuer check, the
 expiry requirement, the mirror rule, the blank/size requirements on `avail`, or always-format-never-extend all
 fail them.
+
+### T12 — Service-to-service trust boundary
+
+`nix/tests/service-auth.nix`. Loopback is not an identity: any local process, and any container on the host
+network, reaches the services' listeners. The message bus and app management skip the user token only for an
+in-stack caller — the gateway's per-start service credential (`/run/casaos/gateway.token`, root `0600`) from
+loopback, or a connection that really arrived on the bus's root-only unix socket. Asserts:
+
+- every in-stack registrant (root, user service, app management, the UI's start.d script) still registers its
+  event types, and the bus logged no 401;
+- loopback without / with a wrong credential, `Host: unix` (direct, through the gateway, and from the LAN
+  address — pinned upstream answered **200 with every event type** there), and the socket as `nobody` are refused;
+- `PUT /v1/sys/state/off` ends in a `systemctl poweroff` requested by `casaos.service`, and the VM powers off.
+
+The code is a stacked series of upstream PRs to EdmundFu-233's repositories, carried as patches until merged
+(AGENTS.md §5): message-bus 0004–0006, app-management 0002–0004, user-service 0002–0003, root 0004–0006,
+UI 0005. Branches in `~/devel/github.com/ppenguin/ReCasaOS-EF/*-EF`; order in [COMPARISON-FORKS.md](./COMPARISON-FORKS.md).
 
 ### Running tests
 

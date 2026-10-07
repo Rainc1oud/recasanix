@@ -70,7 +70,7 @@ rec {
         kind = "patch";
         why = "Not host management — an upstream integration break: this service takes the whole Authorization header value as the token, so `Bearer <token>` (the form the root service requires and the fork calls preferred) is a 401 here while the bare form is a 401 at the root service. No single header satisfied both; the UI showed a first login followed by an immediate logout. Invisible to curl from inside the machine because this service skips authentication for loopback clients.";
         replacedBy = "The service strips an optional `Bearer ` prefix (bare tokens still work).";
-        caller = "n/a — found by the browser check ui-login (T-UI). Note: the loopback auth skip relies on the gateway overwriting X-Forwarded-For; worth a review upstream.";
+        caller = "n/a — found by the browser check ui-login (T-UI). The loopback auth skip itself is closed by the upstream PR series in patches/0004–0006 (unix-socket identity from the connection, loopback needs the gateway service credential); check service-auth (T12).";
       }
     ];
     casaos-user-service = perService { name = "user-service"; } ++ [
@@ -162,10 +162,10 @@ rec {
       }
       {
         path = "service/system.go: SystemReboot / SystemShutdown (`init 6` / `init 0`)";
-        kind = "finding";
-        why = "UI power buttons. Reboot and shutdown are legitimate appliance actions, but the mechanism (SysV `init`) is not portable to NixOS.";
-        replacedBy = "TODO(3.1): patch to `systemctl reboot` / `systemctl poweroff` or provide `init` on the unit's path.";
-        caller = "TODO — kept deliberately (PutSystemState); review in task 3.1";
+        kind = "patch";
+        why = "UI power buttons. Reboot and shutdown are legitimate appliance actions, but the mechanism (SysV `init`) does not exist on NixOS, and a failure was answered with 200.";
+        replacedBy = "`systemctl --no-block reboot|poweroff`, failures answered with 500 (patches/0006, upstream PR; ported from the ReCasaOS-org fork). systemd is on the unit's path.";
+        caller = "yes — PutSystemState is kept and now works; check service-auth (T12) powers the VM off through the API";
       }
       {
         path = "main.go: command.ExecuteScripts(/etc/casaos/start.d)";
@@ -203,6 +203,13 @@ rec {
         why = "Polls /v1/sys/version and offers the in-place update flow (UpdateModal calls POST /v1/sys/update).";
         replacedBy = "Vendor-managed image updates.";
         caller = "yes — the Update block is removed from the TopBar settings menu and checkVersion() no longer queries the API (patches/0001-disable-self-update.patch)";
+      }
+      {
+        path = "src/components/BrandBar.vue: news feed (parseFeed); ContactBar, SmartBlock, share/wiki/awesome links";
+        kind = "patch";
+        why = "Not host management — phone-home and vendor channels. When the news feed was enabled, BrandBar read /var/lib/casaos/baseinfo.conf (device identifiers), base64-encoded it with the UI language and sent it as a query key to blog-casaos.zimaspace.com on every dashboard load. The other affordances sent users to IceWhale's Discord, issue tracker, wiki and social sharing for a project IceWhale no longer ships.";
+        replacedBy = "Nothing; the brand bar shows the logo only. Upstream PR (patches/0006), not a local-only patch.";
+        caller = "yes — the feed, its settings switch and the post-onboarding consent dialog are removed with it; the app icon CDN and App Store catalogue are kept (functional)";
       }
     ];
   };

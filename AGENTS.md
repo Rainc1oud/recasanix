@@ -47,6 +47,7 @@ These were settled with the product owner. If a task seems to require changing o
 | Web UI source | `EdmundFu-233/ReCasaOS-UI` (maintained fork of the unmaintained `IceWhaleTech/CasaOS-UI`; see §6 for the licensing caveat). |
 | CI | Local `nix flake check` for now. CI pipeline + binary cache is a later phase. |
 | Cold vs hot state | **Nix owns the cold layer**: packages, service enablement, base network and storage *layout*, container-runtime setup, drivers, firewall, boot — infrequent, fleet-wide, atomic. **Hot state is imperative and is not routed through Nix**: users (ordinary useradd/PAM-style, `users.mutableUsers = true`), Samba/NFS shares, btrfs/ZFS pool and dataset topology (runtime `mkfs.btrfs`/`btrfs`/`zpool`/`zfs`; no NAS OS declares pools as system config), installed apps/containers, client network config. The CasaOS services already work the TrueNAS-middlewared way — structured records in their own databases, a generator step templates config files (e.g. `smb.casa.conf`, validated with `testparm`) and reloads the service — so we adopt that pattern instead of fighting it. |
+| SMB (decided 2026-10-07) | Samba is **enabled** in the appliance module. **Separate SMB accounts**: dedicated accounts created from the UI/API (no shell, no host login), separate from the CasaOS login, shares restricted per account (`valid users`); imperative hot state (`useradd` + `smbpasswd`, passdb on the state partition). **Nix owns `smb.conf`** (store baseline with `include =` the runtime `smb.casa.conf`); casaos writes only the include file — an *include-only mode* contributed upstream to EdmundFu-233/ReCasaOS, not a local patch. Account model ported from the ReCasaOS-org fork (COMPARISON-FORKS.md, harvest #3). |
 | Baseline + include | Where hot state needs a config file, ship an **immutable baseline** from the store and let the mutable part come in through an *include/override* (`include =` in smb.conf, systemd drop-ins, `conf.d/`), living on the writable state partition. Never make Nix regenerate a config on a password/share change. A `clan.lol`-style inventory is the reference if a fleet-wide runtime layer is ever needed. |
 | Our own license | Intended OSS (AGPL candidate) for *our* glue code. Upstream Apache-2.0 components keep their license. |
 
@@ -134,6 +135,13 @@ Build quirks:
   files in a git tree.
 - Format with `nix fmt` (nixfmt-rfc-style) before finishing a task.
 - Every derivation gets `meta.description`, `meta.license` and `meta.platforms`.
+- **Patches vs upstream PRs.** A change to an upstream component that is useful to upstream (bug
+  and security fixes, integration breaks, features) goes to upstream as a PR — bounded, one concern
+  per PR, interdependent PRs stacked with their order stated — and is carried here as a
+  `nix/pkgs/<component>/patches/` file only until upstream merges it. Only changes that make sense
+  solely for an image-based, Nix-managed host (host-management stripping, NixOS paths) stay
+  local patches. Working clones of the forks live in `~/devel/github.com/ppenguin/ReCasaOS-EF/`
+  (`<repo>-EF`, PR source) and `~/devel/github.com/ppenguin/ReCasaOS/` (`<repo>-RCOS`, reference).
 - Pins go in `flake.lock` via flake inputs; never fetch from the network inside a derivation except
   through a fixed-output fetcher with a recorded hash.
 - Keep vendor hashes (`vendorHash`, `pnpmDeps.hash`) in the derivation files, not in a side file.

@@ -107,3 +107,25 @@ Not taken: telemetry, auto-update, apt updates, installer, LocalStorage, mergerf
 4. SMB discovery via `services.samba-wsdd` + avahi (#5) when SMB scope is decided (task 3.1/3.2 TODO).
 5. App-store mirror under our control (#10) → Phase 6.
 6. Watch ORG for: MD5 → argon2 migration, local bootstrap. If both land → re-run this comparison.
+
+## PR series to EF (status 2026-10-07)
+
+Branches local in `~/devel/github.com/ppenguin/ReCasaOS-EF/<repo>-EF` (forks `ppenguin/<repo>-EF`), not pushed. Carried here as patches until merged (AGENTS.md §5). Verified: Go unit tests red→green per commit; VM check `service-auth` (T12).
+
+| Order | Repo | Branch | Content | Needs | Harvest # |
+|---|---|---|---|---|---|
+| 1 | MessageBus | `fix/unix-socket-identity` | unix-socket exemption from the connection (`LocalAddrContextKey`), not `Host: unix`; socket `0600` | — | 1 |
+| 2a | ReCasaOS | `feat/message-bus-service-credential` | `gatewayclient` service-credential helpers; msgbus client sends `gateway.token` | — | 1 |
+| 2b | UserService | `feat/message-bus-service-credential` | same | — | 1 |
+| 2c | AppManagement | `feat/message-bus-service-credential` | same | — | 1 |
+| 2d | UI | `feat/message-bus-service-credential` | `register-ui-events.sh` sends the credential (via fd, not argv) | — | 1 |
+| 3 | MessageBus | `fix/loopback-needs-service-credential` | loopback skips JWT only with the credential | 1 (stacked), 2a–2d merged | 1 |
+| 4 | AppManagement | `fix/loopback-needs-service-credential` | same, v1 + v2 | 2c (stacked) | 1 |
+| — | ReCasaOS | `fix/systemd-power-actions` | `systemctl --no-block reboot\|poweroff`, failures → 500 (ported, credited alvins82) | — | 2 |
+| — | MessageBus | `fix/subscriptions-before-start` | startup races: subscription made before `Start` wiped (YSK cards stop updating), publish before `Start` → nil-ctx panic; ysk tests poll instead of sleeping (flaked under `nix flake check`) | — (put first: carried as 0002–0003) | — |
+| — | UI | `chore/remove-upstream-community-links` | drop IceWhale Discord/GitHub/feedback/share/wiki/awesome links; drop blog news feed (sent `baseinfo.conf` device ids to `blog-casaos.zimaspace.com`) | — | — |
+
+- Design: reuses EF's existing per-start `gateway.token` (gateway management API already requires it) instead of ORG's new `internal.secret` → no new file/scheme upstream.
+- **#1 is a security fix with a confirmed exploit** on pinned upstream (LAN client + `Host: unix` through the gateway → 200, full bus API) → report privately (GitHub security advisory) before opening PR 1 publicly.
+- Not in series: websocket subscribe still unauthenticated (needs UI + query-token, conflicts EF policy → discuss upstream first); our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
+- Harvest #3 (Samba account shares): pending decision on SMB scope (task 3.1/3.2).

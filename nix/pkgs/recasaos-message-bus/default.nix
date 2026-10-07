@@ -9,7 +9,14 @@ mkCasaosGo {
   version = "0.4.4";
   inherit src;
   vendorHash = "sha256-VZ8cZq9ceiVI8JfB+KVHX+yBVyWHgdsQ+zRNS69XY/k=";
-  patches = [ ./patches/0001-accept-bearer-authorization.patch ];
+  patches = [
+    ./patches/0001-accept-bearer-authorization.patch
+    ./patches/0002-fix-service-startup-races-in-the-event-and-action-di.patch
+    ./patches/0003-test-ysk-wait-for-the-cards-instead-of-sleeping.patch
+    ./patches/0004-security-route-take-unix-socket-identity-from-the-co.patch
+    ./patches/0005-feat-gatewayclient-service-credential-helpers-for-in.patch
+    ./patches/0006-security-route-loopback-needs-the-gateway-service-cr.patch
+  ];
   subPackages = [ "." ];
   renameBinaries.CasaOS-MessageBus = "casaos-message-bus";
   repo = components.recasaos-message-bus.repo;

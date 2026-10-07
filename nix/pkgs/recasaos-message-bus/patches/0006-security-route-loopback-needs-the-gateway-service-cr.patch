@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 16:24:26 +0200
+Subject: [PATCH 6/6] security(route): loopback needs the gateway service
+ credential
+
+The JWT skipper exempted every request from 127.0.0.1/::1. Loopback is
+not an identity: any local process, and any container on the host
+network, reaches the bus there and could read and publish every event.
+
+A loopback caller now skips the user token only when it also presents
+the gateway's per-start service credential (gateway.token, owner-only;
+gatewayclient.ServiceAuthorizationMatches), the same credential the
+gateway's management API already requires. The unix socket and the
+websocket subscribe exemption are unchanged.
+
+Depends on the in-stack callers sending the credential first:
+- ReCasaOS, ReCasaOS-UserService, ReCasaOS-AppManagement:
+  "present the service credential to the message bus"
+- ReCasaOS-UI: "present the service credential when registering UI events"
+Stacked on "take unix-socket identity from the connection".
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ route/routers.go      |  7 ++++++-
+ route/routers_test.go | 36 ++++++++++++++++++++++++++++++++++++
+ 2 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/route/routers.go b/route/routers.go
+index 7b878f6..e536043 100644
+--- a/route/routers.go
++++ b/route/routers.go
+@@ -12,6 +12,7 @@ import (
+ 	"github.com/IceWhaleTech/CasaOS-Common/utils/jwt"
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/codegen"
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/config"
++	"github.com/IceWhaleTech/CasaOS-MessageBus/pkg/gatewayclient"
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/service"
+ 	"github.com/deepmap/oapi-codegen/pkg/middleware"
+ 	"github.com/getkin/kin-openapi/openapi3"
+@@ -45,7 +46,11 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
+ 				return true
+ 			}
+ 
+-			if c.RealIP() == "::1" || c.RealIP() == "127.0.0.1" {
++			// loopback is not an identity (any local process or container on
++			// the host network reaches it): an in-stack service presents the
++			// gateway's per-start service credential as well
++			if (c.RealIP() == "::1" || c.RealIP() == "127.0.0.1") &&
++				gatewayclient.ServiceAuthorizationMatches(config.CommonInfo.RuntimePath, c.Request().Header.Get(echo.HeaderAuthorization)) {
+ 				return true
+ 			}
+ 
+diff --git a/route/routers_test.go b/route/routers_test.go
+index 888cf46..dc106f2 100644
+--- a/route/routers_test.go
++++ b/route/routers_test.go
+@@ -5,9 +5,13 @@ import (
+ 	"net"
+ 	"net/http"
+ 	"net/http/httptest"
++	"os"
++	"path/filepath"
+ 	"testing"
+ 
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/codegen"
++	"github.com/IceWhaleTech/CasaOS-MessageBus/config"
++	"github.com/IceWhaleTech/CasaOS-MessageBus/pkg/gatewayclient"
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/repository"
+ 	"github.com/IceWhaleTech/CasaOS-MessageBus/service"
+ 	"gotest.tools/assert"
+@@ -56,3 +60,35 @@ func TestAPIRouterUnixSocketIdentity(t *testing.T) {
+ 	assert.Equal(t, listEventTypes("example.org", unix), http.StatusOK, "the unix socket listener")
+ 	assert.Equal(t, listEventTypes("unix", unix), http.StatusOK, "the in-tree socket client")
+ }
++
++// Loopback is not an identity: a loopback caller skips the user token only with
++// the gateway's per-start service credential.
++func TestAPIRouterLoopbackNeedsServiceCredential(t *testing.T) {
++	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
++
++	runtimePath := t.TempDir()
++	assert.NilError(t, os.WriteFile(filepath.Join(runtimePath, gatewayclient.ServiceTokenFilename), []byte(token+"\n"), 0o600))
++	previous := config.CommonInfo.RuntimePath
++	config.CommonInfo.RuntimePath = runtimePath
++	t.Cleanup(func() { config.CommonInfo.RuntimePath = previous })
++
++	router := newTestAPIRouter(t)
++
++	listEventTypes := func(remote, authorization string) int {
++		req := httptest.NewRequest(http.MethodGet, "/v2/message_bus/event_type", nil)
++		req.RemoteAddr = remote
++		if authorization != "" {
++			req.Header.Set("Authorization", authorization)
++		}
++		rec := httptest.NewRecorder()
++		router.ServeHTTP(rec, req)
++		return rec.Code
++	}
++
++	assert.Equal(t, listEventTypes("127.0.0.1:40000", ""), http.StatusUnauthorized, "loopback without a credential")
++	assert.Equal(t, listEventTypes("[::1]:40000", ""), http.StatusUnauthorized, "IPv6 loopback without a credential")
++	assert.Equal(t, listEventTypes("127.0.0.1:40000", "Bearer "+token[:len(token)-1]+"0"), http.StatusUnauthorized, "loopback with a wrong credential")
++	assert.Equal(t, listEventTypes("192.0.2.10:40000", "Bearer "+token), http.StatusUnauthorized, "the credential from the LAN")
++	assert.Equal(t, listEventTypes("127.0.0.1:40000", "Bearer "+token), http.StatusOK, "loopback with the credential")
++	assert.Equal(t, listEventTypes("[::1]:40000", token), http.StatusOK, "IPv6 loopback with the bare credential")
++}

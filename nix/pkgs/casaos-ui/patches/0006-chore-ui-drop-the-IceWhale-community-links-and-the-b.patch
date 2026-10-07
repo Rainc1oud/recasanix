@@ -1,0 +1,1005 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 17:05:31 +0200
+Subject: [PATCH 6/6] chore(ui): drop the IceWhale community links and the blog
+ news feed
+
+The dashboard still pointed users at IceWhale's channels for a project
+IceWhale no longer ships: feedback to IceWhaleTech/CasaOS issues, their
+Discord (contact bar and the "Smarten up your home" card), the CasaOS
+wiki, awesome.casaos.io, and social-share buttons advertising the
+IceWhale repository. Questions about this fork do not belong there.
+
+The optional news feed went further than a link: when enabled, BrandBar
+read /var/lib/casaos/baseinfo.conf (device identifiers), base64-encoded
+it with the UI language, and sent it as a query key to
+blog-casaos.zimaspace.com on every dashboard load. The feed, its
+settings switch and the one-off consent dialog after onboarding are
+removed; the brand bar shows the logo and credit line only.
+
+Removed: ContactBar, FeedbackPanel, ShareModal, SmartBlock components;
+the news-feed switch in the dashboard settings; "More"/help links to
+awesome.casaos.io in app-store sources; "Free up storage" wiki links;
+the share block in the update-complete modal.
+
+Kept: the app icon CDN (icon.casaos.io) and the App Store catalogue,
+which are functional; message-bus event type names.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/App.vue                                   |  10 -
+ .../Apps/AppStoreSourceManagement.vue         |  18 --
+ src/components/BrandBar.vue                   |  68 +------
+ src/components/ContactBar.vue                 | 150 --------------
+ src/components/CoreService.vue                |   6 +-
+ src/components/Storage/StorageCombination.vue |   4 -
+ src/components/Storage/StorageItem.vue        |   3 -
+ src/components/TopBar.vue                     |  44 ----
+ src/components/feedback/FeedbackPanel.vue     | 160 ---------------
+ .../settings/UpdateCompleteModal.vue          |  21 --
+ src/components/share/ShareModal.vue           | 190 ------------------
+ src/components/smartHome/SmartBlock.vue       |  63 ------
+ src/views/Home.vue                            |  22 --
+ 13 files changed, 2 insertions(+), 757 deletions(-)
+ delete mode 100644 src/components/ContactBar.vue
+ delete mode 100644 src/components/feedback/FeedbackPanel.vue
+ delete mode 100644 src/components/share/ShareModal.vue
+ delete mode 100644 src/components/smartHome/SmartBlock.vue
+
+diff --git a/src/App.vue b/src/App.vue
+index e43c749..ab6fe60 100644
+--- a/src/App.vue
++++ b/src/App.vue
+@@ -11,10 +11,6 @@
+ 				<brand-bar v-if="!$store.state.isMobile && $router.currentRoute.path === '/'"
+ 						   v-animate-css="brandAni"></brand-bar>
+ 				<!-- BrandBar End -->
+-				<!-- ContactBar Start -->
+-				<contact-bar v-if="!$store.state.isMobile && $router.currentRoute.path === '/'"
+-							 v-animate-css="contactAni"></contact-bar>
+-				<!-- ContactBar End -->
+ 			</div>
+ 
+ 		</template>
+@@ -28,7 +24,6 @@
+ 
+ <script>
+ import BrandBar      from './components/BrandBar.vue'
+-import ContactBar    from './components/ContactBar.vue'
+ import CasaWallpaper from './components/wallpaper/CasaWallpaper.vue'
+ import {mixin}       from './mixins/mixin';
+ 
+@@ -66,7 +61,6 @@ const customIconConfig = {
+ export default {
+ 	components: {
+ 		BrandBar,
+-		ContactBar,
+ 		CasaWallpaper
+ 	},
+ 	mixins: [mixin],
+@@ -86,10 +80,6 @@ export default {
+ 				classes: "fadeInLeft",
+ 				duration: 700
+ 			},
+-			contactAni: {
+-				classes: "fadeInRight",
+-				duration: 700
+-			},
+ 			"vh": "0px"
+ 		}
+ 	},
+diff --git a/src/components/Apps/AppStoreSourceManagement.vue b/src/components/Apps/AppStoreSourceManagement.vue
+index b1e4449..5c70a36 100644
+--- a/src/components/Apps/AppStoreSourceManagement.vue
++++ b/src/components/Apps/AppStoreSourceManagement.vue
+@@ -85,13 +85,6 @@ function unregisterAppStore(id) {
+ 	})
+ }
+ 
+-function redirectURL() {
+-	if (sourceDorpRef.value) {
+-		sourceDorpRef.value.toggle();
+-	}
+-	window.open("https://awesome.casaos.io/content/3rd-party-app-stores/list.html", "_blank", "noopener");
+-}
+-
+ function activeInput() {
+ 	if (componentState.value === "active_input_state") {
+ 		app.$refs.inputSourceURL.focus()
+@@ -194,23 +187,12 @@ onBeforeUnmount(() => {
+ 						}}
+ 						</span>
+ 					</b-dropdown-item>
+-					<b-dropdown-item @click="redirectURL">
+-						<span class="one-line"> {{
+-							$t("More")
+-						}}
+-						</span>
+-					</b-dropdown-item>
+ 				</b-dropdown>
+ 			</div>
+ 			<div v-else-if="componentState === 'active_input_state'" key="3" class="is-flex is-align-items-center">
+ 				<b-field class="mb-0">
+ 					<b-input class="_sources_input" ref="inputSourceURL" v-model="url" :disabled="addLoadingState"
+ 						v-on:keyup.enter.native="registerAppStore(url)"></b-input>
+-					<b-tooltip label="Get more apps" position="is-bottom" class="add-tooltip" type="is-dark"
+-						:class="{ disabled: addLoadingState }">
+-						<b-icon class="is-clickable" icon="question-outline" pack="casa" size="is-small"
+-							@click.native="redirectURL" />
+-					</b-tooltip>
+ 					<p class="control">
+ 						<b-button class="_sources_input" @click="registerAppStore(url)" :loading="addLoadingState">{{
+ 							$t("Add") }}</b-button>
+diff --git a/src/components/BrandBar.vue b/src/components/BrandBar.vue
+index 2f3dd8a..adc5513 100644
+--- a/src/components/BrandBar.vue
++++ b/src/components/BrandBar.vue
+@@ -3,79 +3,13 @@
+ 		<figure class="image _is-136x26 mb-3">
+ 			<img alt="logo" srcset="../assets/img/logo/logo.svg 2x, ../assets/img/logo/logo.png 1x">
+ 		</figure>
+-		<span v-if="!rssShow || rss.length === 0" class="intro-text ml-4">Made with ❤️ by IceWhale and YOU!</span>
+-		<span v-else class="window ml-4">
+-			<ul :style="{ '--time': 5 * line + 's', '--perc': perc, '--line': line }" class="scroll">
+-				<li v-for="(item, key) in rss" :key="key" class="has-text-left" @click="$messageBus('connect_news')">
+-					<a @click="gotoLink(item.link)" class="intro-text is-clickable" target="_blank"
+-						rel="noopener noreferrer">
+-						{{ item.title }}
+-					</a>
+-				</li>
+-			</ul>
+-		</span>
+-
++		<span class="intro-text ml-4">Made with ❤️ by IceWhale and YOU!</span>
+ 	</div>
+ </template>
+ 
+ <script>
+-import DOMPurify from 'dompurify';
+-import { parse} from 'rss-to-json'
+ export default {
+ 	name: "brand-bar",
+-	components: {},
+-	computed: {
+-		rssShow() {
+-			let which = this.$store.state.rssSwitch
+-			if (which) {
+-				this.parseFeed()
+-			}
+-			return which
+-		},
+-		line() {
+-			return this.rss.length
+-		},
+-		perc() {
+-			return -(this.line - 1) / this.line * 100 + '%'
+-		},
+-		isShow() {
+-			return this.$route.path !== '/login' || this.$route.path !== '/welcome'
+-		},
+-	},
+-	watch: {
+-		isShow(val) {
+-			val && this.parseFeed()
+-		}
+-	},
+-	data() {
+-		return {
+-			rss: [],
+-		};
+-	},
+-	methods: {
+-		async parseFeed() {			
+-			let params = await this.$api.file.getContent('/var/lib/casaos/baseinfo.conf').then(res => {
+-				return JSON.parse(res.data.data)
+-			})
+-			this.$store.commit('SET_DEVICE_ID', params.i)
+-			params.l = localStorage.getItem('lang') ? localStorage.getItem('lang') : navigator.language.toLowerCase().replace("-", "_");
+-			let stringify = btoa(encodeURIComponent(JSON.stringify(params)))
+-			let feed = await parse('https://blog-casaos.zimaspace.com/feed/tag/dashboard/?key=' + stringify)
+-			const newFeed = feed.items.map(item => {
+-				return {
+-					title: item.title,
+-					link: DOMPurify.sanitize(item.link, { ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.1-9]+(?:[^a-z+.1-9]|$))/i })
+-				}
+-			})
+-			this.rss = newFeed
+-			
+-			
+-		},
+-
+-		gotoLink(link) {
+-			window.open(link, '_blank')
+-		}
+-	}
+ }
+ </script>
+ 
+diff --git a/src/components/ContactBar.vue b/src/components/ContactBar.vue
+deleted file mode 100644
+index 441e373..0000000
+--- a/src/components/ContactBar.vue
++++ /dev/null
+@@ -1,150 +0,0 @@
+-<template>
+-	<div class="contact-bar is-flex is-align-items-center has-text-white">
+-
+-		<popper :options="{
+-			placement: 'top',
+-			modifiers: { offset: { offset: '0,4px' } }
+-		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
+-			<div class="popper  tooltip-content">
+-				{{ $t('Submit a feedback or report an issue') }}
+-			</div>
+-			<a slot="reference" @click="showFeedback">
+-				<b-icon icon="eedback" pack="casa"></b-icon>
+-			</a>
+-		</popper>
+-
+-		<popper :options="{
+-			placement: 'top',
+-			modifiers: { offset: { offset: '0,4px' } }
+-		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
+-			<div class="popper  tooltip-content">
+-				{{ $t('Join Discord') }}
+-			</div>
+-			<a slot="reference" rel="noopener" href="https://discord.gg/knqAbbBbeX" target="_blank"
+-				@click="$messageBus('connect_discord')">
+-				<b-icon icon="discord" pack="casa"></b-icon>
+-			</a>
+-		</popper>
+-
+-		<popper :options="{
+-			placement: 'top',
+-			modifiers: { offset: { offset: '0,4px' } }
+-		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
+-			<div class="popper  tooltip-content">
+-				{{ $t('Visit our Github') }}
+-			</div>
+-			<a slot="reference" rel="noopener" href="https://github.com/IceWhaleTech/CasaOS" target="_blank"
+-				@click="$messageBus('connect_github')">
+-				<b-icon icon="github" pack="casa"></b-icon>
+-			</a>
+-		</popper>
+-
+-		<popper :options="{
+-			placement: 'top',
+-			modifiers: { offset: { offset: '0,4px' } }
+-		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
+-			<div class="popper  tooltip-content">
+-				{{ $t('Share CasaOS') }}
+-			</div>
+-			<a slot="reference" @click="showShareModal">
+-				<b-icon icon="chat" pack="casa"></b-icon>
+-			</a>
+-		</popper>
+-
+-	</div>
+-</template>
+-
+-<script>
+-import FeedbackPanel from './feedback/FeedbackPanel.vue'
+-import ShareModal from '@/components/share/ShareModal.vue'
+-import Popper from 'vue-popperjs';
+-
+-
+-export default {
+-	name: "contact-bar",
+-	components: {
+-		Popper,
+-	},
+-	methods: {
+-		showFeedback() {
+-			// messageBus :: feedback
+-			this.$messageBus('connect_feedback');
+-			this.$buefy.modal.open({
+-				parent: this,
+-				component: FeedbackPanel,
+-				hasModalCard: true,
+-				customClass: 'feedback-modal',
+-				trapFocus: true,
+-				canCancel: [],
+-				scroll: "keep",
+-				animation: "zoom-in",
+-			})
+-		},
+-
+-		showShareModal() {
+-			// messageBus :: share
+-			this.$messageBus('connect_sharecasaos');
+-			this.$buefy.modal.open({
+-				parent: this,
+-				component: ShareModal,
+-				hasModalCard: true,
+-				customClass: 'network-storage-modal',
+-				trapFocus: true,
+-				canCancel: [],
+-				scroll: "keep",
+-				animation: "zoom-in",
+-			})
+-		}
+-	},
+-}
+-</script>
+-
+-<style lang="scss" scoped>
+-.contact-bar {
+-	position: fixed;
+-	right: 1.375rem;
+-	bottom: 0;
+-	//z-index: 10;
+-
+-	a {
+-		color: #fff;
+-		margin: 0.625rem;
+-		display: flex;
+-		align-items: center;
+-
+-		&:hover {
+-			color: #fff;
+-		}
+-	}
+-}
+-
+-.popper {
+-	background-color: $primary;
+-	padding: 0.35rem 0.75rem;
+-	box-shadow: 0px 1px 2px 1px rgba(0, 1, 0, 0.2);
+-	border: none;
+-	color: #ffffff;
+-	border-radius: 6px;
+-	font-size: 0.85rem;
+-	font-weight: 400;
+-}
+-
+-
+-@media screen and (max-width: 480px) {
+-	.contact-bar {
+-		right: 0;
+-		bottom: 0rem;
+-		background-color: transparent;
+-		backdrop-filter: none;
+-		display: flex;
+-		justify-content: center;
+-		width: 100%;
+-	}
+-}
+-</style>
+-
+-<style lang="scss">
+-.popper .popper__arrow {
+-	border-color: $primary transparent transparent transparent !important;
+-}
+-</style>
+diff --git a/src/components/CoreService.vue b/src/components/CoreService.vue
+index 36f77ed..7acc9e0 100644
+--- a/src/components/CoreService.vue
++++ b/src/components/CoreService.vue
+@@ -4,7 +4,6 @@ import sortBy from 'lodash/sortBy'
+ import noticeBlock from '@/components/noticBlock/noticeBlock'
+ import { mixin } from '@/mixins/mixin'
+ import SyncBlock from '@/components/syncthing/SyncBlock.vue'
+-import SmartBlock from '@/components/smartHome/SmartBlock.vue'
+ import events from '@/events/events'
+ import Business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
+ import DiskLearnMore from '@/components/Storage/DiskLearnMore.vue'
+@@ -12,7 +11,7 @@ import { ice_i18n } from '@/mixins/base/common-i18n'
+ 
+ export default {
+   name: 'CoreService',
+-  components: { SmartBlock, SyncBlock, NoticeBlock: noticeBlock, Swiper, SwiperSlide },
++  components: { SyncBlock, NoticeBlock: noticeBlock, Swiper, SwiperSlide },
+   mixins: [mixin, Business_ShowNewAppTag],
+   inject: ['homeShowFiles'],
+   data() {
+@@ -571,9 +570,6 @@ export default {
+     <SwiperSlide v-if="recommendShow">
+       <SyncBlock />
+     </SwiperSlide>
+-    <SwiperSlide v-if="recommendShow">
+-      <SmartBlock />
+-    </SwiperSlide>
+     <template #pagination>
+       <div v-show="recommendShow || noticeLength !== 0" class="swiper-pagination" />
+     </template>
+diff --git a/src/components/Storage/StorageCombination.vue b/src/components/Storage/StorageCombination.vue
+index 3f6b692..f4cec9a 100644
+--- a/src/components/Storage/StorageCombination.vue
++++ b/src/components/Storage/StorageCombination.vue
+@@ -44,10 +44,6 @@
+ 						renderSize(usage)
+ 					}}/{{ renderSize(totleSize) }}
+ 				</div>
+-				<p v-if="usePercent >= 80"
+-				   class="has-text-right is-flex is-flex-direction-row-reverse">
+-					<a rel="noopener" href="https://wiki.casaos.io/zh/guides" target="_blank">{{ $t("Free up storage") }}</a>
+-				</p>
+ 				<div class="is-flex is-flex-direction-row-reverse">
+ 					<b-button :type="type" class="width" rounded size="is-small"
+ 							  @click="showStorageSettingsModal">{{ $t('Merge Storages') }}
+diff --git a/src/components/Storage/StorageItem.vue b/src/components/Storage/StorageItem.vue
+index edf5445..a9f842a 100644
+--- a/src/components/Storage/StorageItem.vue
++++ b/src/components/Storage/StorageItem.vue
+@@ -38,9 +38,6 @@
+ 						  rounded size="is-small" @click="removeStorage(item.disk)"> {{ $t('Remove') }}
+ 				</b-button>
+ 			</div>
+-			<p v-else-if="item.usePercent >= 80" class="has-text-right is-flex is-flex-direction-column-reverse">
+-				<a rel="noopener" href="https://wiki.casaos.io/zh/guides" target="_blank">{{ $t("Free up storage") }}</a>
+-			</p>
+ 		</div>
+ 		<b-progress :type="item.usePercent | getProgressType" :value="item.usePercent || 0"
+ 					class="ml-3 mr-3" size="is-small"></b-progress>
+diff --git a/src/components/TopBar.vue b/src/components/TopBar.vue
+index dc070d1..b04c1da 100644
+--- a/src/components/TopBar.vue
++++ b/src/components/TopBar.vue
+@@ -375,29 +375,6 @@ export default {
+       })
+     },
+ 
+-    rssConfirm() {
+-      if (this.rss_switch == false) {
+-        this.barData.rss_switch = false
+-        return this.saveData()
+-      }
+-      this.$buefy.dialog.confirm({
+-        title: this.$t('Show news feed from CasaOS Blog'),
+-        message: this.$t(
+-          'CasaOS dashboard will get the the latest news feed of https://blog.casaos.io via Internet, which might leave your visit records to the site. Do you accept?',
+-        ),
+-        type: 'is-dark',
+-        confirmText: this.$t('Accept'),
+-        cancelText: this.$t('Cancel'),
+-        onConfirm: () => {
+-          this.barData.rss_switch = true
+-          this.saveData()
+-        },
+-        onCancel: () => {
+-          this.barData.rss_switch = false
+-          this.rss_switch = false
+-        },
+-      })
+-    },
+     power(key) {
+       if (this[key.toLowerCase()] !== 'Are you sure?') {
+         this[key.toLowerCase()] = 'Are you sure?'
+@@ -646,27 +623,6 @@ export default {
+           </div>
+           <!--  Show other Docker container app(s) Switch End  -->
+ 
+-          <!--  Show other Docker container app(s) Switch Start  -->
+-          <div
+-            class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
+-          >
+-            <div class="is-flex is-align-items-center is-flex-grow-1 _is-normal">
+-              <b-icon class="mr-1 ml-2" icon="news-outline" pack="casa" size="is-20" />
+-              {{ $t("Show news feed from CasaOS Blog") }}
+-            </div>
+-            <div>
+-              <b-field>
+-                <b-switch
+-                  v-model="rss_switch"
+-                  :native-value="barData.rss_switch"
+-                  class="is-flex-direction-row-reverse mr-0 _small"
+-                  type="is-dark"
+-                  @input="rssConfirm"
+-                />
+-              </b-field>
+-            </div>
+-          </div>
+-          <!--  Show other Docker container app(s) Switch End  -->
+           <!--  Recommended modules Switch Start  -->
+           <div
+             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
+diff --git a/src/components/feedback/FeedbackPanel.vue b/src/components/feedback/FeedbackPanel.vue
+deleted file mode 100644
+index 753b48d..0000000
+--- a/src/components/feedback/FeedbackPanel.vue
++++ /dev/null
+@@ -1,160 +0,0 @@
+-<template>
+-	<div class="modal-card">
+-
+-		<!-- Modal-Card Body Start -->
+-		<section class="modal-card-body ">
+-
+-			<h3 class="title is-3">{{ $t('Feedback / Issue Report') }}</h3>
+-			<div class="close-container">
+-				<button class="delete" type="button" @click="$emit('close')"/>
+-			</div>
+-
+-			<div class="is-flex-grow-1 is-relative">
+-				<b-field :label="$t('Title')">
+-					<b-input v-model="postTitle" :placeholder="$t('Start with [Issue], [App Request], or [Feature Request]...')"
+-							 maxlength="100"></b-input>
+-				</b-field>
+-				<b-field :label="$t('Description')">
+-					<b-input v-model="postBody" :placeholder="$t('The more details provided, the easier this feedback or issue gets addressed.')" maxlength="500"
+-							 type="textarea"></b-input>
+-				</b-field>
+-				<b-field :label="$t('System infomation')">
+-					<div class="feedback-info-container is-size-14px" v-dompurify-html="markdownToHtml"></div>
+-				</b-field>
+-			</div>
+-		</section>
+-
+-		<!-- Modal-Card Body End -->
+-		<!-- Modal-Card Footer Start-->
+-		<footer class="modal-card-foot is-flex is-align-items-center ">
+-			<div class="is-flex-grow-1">
+-				<a class="is-size-14px" rel="noopener"
+-				   href="https://github.com/IceWhaleTech/CasaOS/issues/new/choose"
+-				   target="_blank">{{ $t('For more feedback options, visit CasaOS project on GitHub...') }}</a>
+-			</div>
+-			<div>
+-				<b-button :label="$t('Submit')" rounded type="is-primary" @click="submitIssue"/>
+-			</div>
+-		</footer>
+-		<!-- Modal-Card Footer End -->
+-		<b-loading v-model="isLoading" :can-cancel="false" :is-full-page="false"></b-loading>
+-	</div>
+-</template>
+-
+-<script>
+-
+-import browserInfo from 'browser-info'
+-import {marked}    from 'marked'
+-
+-export default {
+-	name: "feedback-panel",
+-	components: {},
+-	data() {
+-		return {
+-			isLoading: false,
+-			feedBody: "",
+-			postTitle: "",
+-			postBody: "",
+-		}
+-	},
+-
+-	computed: {
+-		markdownToHtml() {
+-			return marked.parse(this.feedBody);
+-		}
+-	},
+-
+-	mounted() {
+-		this.$api.sys.getDebugInfo().then(res => {
+-			const browserInfos = browserInfo();
+-			this.feedBody = res.data.data.replace("$Browser$", browserInfos.name).replace("$Version$", browserInfos.fullVersion);
+-		})
+-	},
+-	methods: {
+-		submitIssue() {
+-			const option = {
+-				labels: "feedback",
+-				template: "feedback.yml",
+-				title: "[Feedback]" + this.postTitle,
+-				description: this.postBody,
+-				additional: this.feedBody,
+-			}
+-			let repoUrl = new URL(`https://github.com/IceWhaleTech/CasaOS/issues/new`);
+-			for (const optionElement in option) {
+-				repoUrl.searchParams.set(optionElement, option[optionElement]);
+-			}
+-			window.open(repoUrl, '_blank');
+-			this.$emit('close');
+-		}
+-	},
+-}
+-</script>
+-
+-<style lang="scss" scoped>
+-.feedback-info-container {
+-	border-radius: 4px;
+-	overflow: hidden;
+-
+-	h1,
+-	h2,
+-	h3,
+-	h4,
+-	h5,
+-	h6 {
+-		font-weight: bold;
+-		margin-bottom: 0.4rem;
+-	}
+-
+-	h1 {
+-		font-size: 2em;
+-	}
+-
+-	h2 {
+-		font-size: 1.5em;
+-	}
+-
+-	h3 {
+-		font-size: 1.17em;
+-	}
+-
+-	h4 {
+-		font-size: 1em;
+-	}
+-
+-	h5 {
+-		font-size: 0.83em;
+-	}
+-
+-	h6 {
+-		font-size: 0.67em;
+-	}
+-
+-	ul {
+-		margin-bottom: 0.5em;
+-
+-		li {
+-			list-style: disc;
+-			margin-left: 1rem;
+-		}
+-	}
+-}
+-
+-.feedback-modal {
+-	.modal-card-body {
+-		overflow-y: hidden;
+-		transition: height 0.3s;
+-		padding: 2rem 2rem 2rem 2rem;
+-		position: relative;
+-	}
+-
+-	.modal-card-foot {
+-		padding-top: 0;
+-	}
+-
+-	.close-container {
+-		position: absolute;
+-		right: 2rem;
+-		top: 2rem;
+-	}
+-}
+-</style>
+diff --git a/src/components/settings/UpdateCompleteModal.vue b/src/components/settings/UpdateCompleteModal.vue
+index ce0c81c..5b54700 100644
+--- a/src/components/settings/UpdateCompleteModal.vue
++++ b/src/components/settings/UpdateCompleteModal.vue
+@@ -13,20 +13,6 @@
+ 		<section class="modal-card-body ">
+ 			<div class="node-card  mt-5 mb-5">
+ 				<div class="update-info-container  is-size-14px " v-dompurify-html="markdownToHtml"></div>
+-				<div class="mt-2rem">
+-					<h3 class="title is-5 mb-2">{{ $t('Let more friends know') }}</h3>
+-					<div class=" is-size-14px">{{ $t('Please share to friends who are concerned about family and data privacy to join and use CasaOS.') }}
+-					</div>
+-				</div>
+-
+-				<div class="buttons is-justify-content-center mb-6 mt-4">
+-					<ShareNetwork v-for="site in shareSites" :network="site" :key="site" :url="githubUrl"
+-						:title="shareTitle" hashtags="homecloud,opensource">
+-						<b-button icon-pack="casa" :icon-left="site" :type="`is-${site}`" class="ml-3 mr-3">
+-							Share
+-						</b-button>
+-					</ShareNetwork>
+-				</div>
+ 
+ 			</div>
+ 		</section>
+@@ -49,13 +35,6 @@ export default {
+ 			timer: 0,
+ 			updateTimer: 0,
+ 			markdown: ``,
+-			githubUrl: `https://github.com/IceWhaleTech/CasaOS`,
+-			shareTitle: `I'm using CasaOS, a simple, easy-to-use, elegant open-source home cloud system, try it like me.`,
+-			shareSites: [
+-				'facebook',
+-				'twitter',
+-				'reddit'
+-			]
+ 		};
+ 	},
+ 	computed: {
+diff --git a/src/components/share/ShareModal.vue b/src/components/share/ShareModal.vue
+deleted file mode 100644
+index 53781d7..0000000
+--- a/src/components/share/ShareModal.vue
++++ /dev/null
+@@ -1,190 +0,0 @@
+-<template>
+-	<div class="modal-card">
+-		<!-- Modal-Card Header Start -->
+-		<header class="modal-card-head">
+-			<div class="is-flex-grow-1">
+-				<h3 class="title is-3">{{ $t('Share CasaOS') }}</h3>
+-			</div>
+-			<div>
+-				<button class="delete" type="button" @click="$emit('close')"/>
+-			</div>
+-		</header>
+-		<!-- Modal-Card Header End -->
+-		<!-- Modal-Card Body Start -->
+-		<section class="modal-card-body ">
+-			<div class="node-card  mt-5 mb-5">
+-
+-				<div>
+-					<div class=" is-size-14px">{{
+-						$t('Please invite more friends who are concerned about family and data privacy to join and use CasaOS.')
+-						}}
+-					</div>
+-
+-					<b-image :src="require('@/assets/img//social/share_img.png')"
+-							 class="share-img-shadow share-img"></b-image>
+-				</div>
+-
+-				<div class="buttons is-justify-content-center mb-6 mt-4">
+-					<ShareNetwork v-for="site in shareSites" :key="site" :description="shareTitle" :img="githubUrl"
+-								  :network="site"
+-								  :title="shareTitle" :url="githubUrl" hashtags="homecloud,opensource">
+-						<b-button :icon-left="site" :type="`is-${site}`" class="ml-3 mr-3" icon-pack="casa">
+-							Share
+-						</b-button>
+-					</ShareNetwork>
+-				</div>
+-
+-			</div>
+-		</section>
+-		<!-- Modal-Card Body End -->
+-	</div>
+-</template>
+-
+-<script>
+-import {marked} from 'marked'
+-
+-export default {
+-	props: {
+-		changeLog: {
+-			type: String,
+-			default: ""
+-		},
+-	},
+-	data() {
+-		return {
+-			timer: 0,
+-			updateTimer: 0,
+-			githubUrl: `https://raw.githubusercontent.com/IceWhaleTech/logo/main/casaos/0.4/casaos_social_share.png`,
+-			shareTitle: `I'm using CasaOS, a simple, easy-to-use, elegant open-source home cloud system, try it like me.`,
+-			shareSites: [
+-				'facebook',
+-				'twitter',
+-				'reddit'
+-			]
+-		};
+-	},
+-	computed: {
+-		markdownToHtml() {
+-			return marked.parse(this.changeLog);
+-		}
+-	},
+-	methods: {
+-		/**
+-		 * @description: Update System Version and check update state
+-		 * @return {*} void
+-		 */
+-		async updateSystem() {
+-			this.isUpdating = true;
+-			await this.$api.sys.updateCasaOS();
+-			this.getUpdateLogs()
+-		},
+-
+-		/**
+-		 * @description: Get update logs
+-		 * @return {*} void
+-		 */
+-		getUpdateLogs() {
+-			this.updateTimer = setInterval(() => {
+-				this.$api.file.getContent(`/var/log/casaos/upgrade.log`).then(res => {
+-
+-					this.updateLogs = res.data.data;
+-					if (this.updateLogs.includes(`CasaOS upgrade successfully`)) {
+-						clearInterval(this.updateTimer);
+-						setTimeout(() => {
+-							location.reload();
+-						}, 1000);
+-					} else if (this.updateLogs.includes(`CasaOS upgrade failed`)) {
+-						this.$buefy.toast.open({
+-							message: this.$t(`There seems to be a problem with the upgrade process, please try again!`),
+-							type: 'is-danger'
+-						})
+-						clearInterval(this.updateTimer);
+-						setTimeout(() => {
+-							this.isUpdating = false;
+-						}, 1000);
+-
+-					}
+-				})
+-			}, 200);
+-		},
+-		/**
+-		 * @description: check update state if is_need is false then reload page
+-		 * @return {*} void
+-		 */
+-		checkUpdateState() {
+-			this.timer = setInterval(() => {
+-				this.$api.sys.getVersion().then(res => {
+-					if (res.data.success == 200) {
+-						if (!res.data.data.is_need) {
+-							clearInterval(this.timer);
+-							location.reload();
+-						}
+-					}
+-				})
+-			}, 3000)
+-		},
+-	},
+-}
+-</script>
+-
+-<style lang="scss">
+-.share-img-shadow {
+-	box-shadow: 0px 16px 24px 2px rgba(115, 120, 128, 0.4);
+-}
+-
+-.share-img {
+-	margin: 3rem 6rem 4rem 6rem;
+-}
+-
+-.update-info-container {
+-	overflow: hidden;
+-	min-height: 20rem;
+-	background: #f8f8f8;
+-	border: 1px solid rgba(0, 0, 0, 0.1);
+-	border-radius: 0.75rem;
+-	padding: 1.5rem;
+-
+-	h1,
+-	h2,
+-	h3,
+-	h4,
+-	h5,
+-	h6 {
+-		font-weight: bold;
+-		margin-bottom: 0.4rem;
+-	}
+-
+-	h1 {
+-		font-size: 2em;
+-	}
+-
+-	h2 {
+-		font-size: 1.5em;
+-	}
+-
+-	h3 {
+-		font-size: 1.17em;
+-	}
+-
+-	h4 {
+-		font-size: 1em;
+-	}
+-
+-	h5 {
+-		font-size: 0.83em;
+-	}
+-
+-	h6 {
+-		font-size: 0.67em;
+-	}
+-
+-	ul {
+-		margin-bottom: 0.5em;
+-
+-		li {
+-			list-style: disc;
+-			margin-left: 1rem;
+-		}
+-	}
+-}
+-</style>
+diff --git a/src/components/smartHome/SmartBlock.vue b/src/components/smartHome/SmartBlock.vue
+deleted file mode 100644
+index 0fdee15..0000000
+--- a/src/components/smartHome/SmartBlock.vue
++++ /dev/null
+@@ -1,63 +0,0 @@
+-<template>
+-	<div class="common-card">
+-		<div class="blur-background"></div>
+-		<div class="wuji-content _box is-flex is-flex-direction-column">
+-			<h6 class="title is-4 mb-0 has-text-white is-flex-shrink-0">{{ $t('Smarten up your home') }}</h6>
+-			<div class="is-flex is-align-items-center is-flex-grow-1 _notice-content-text">
+-				<div class="info ">
+-					<div class="des two-line  is-size-14px">
+-						{{
+-						$t('We want to give you a smart home experience with privacy, high speed, and localized storage.')
+-						}}
+-					</div>
+-				</div>
+-				<b-image :src="require('@/assets/img/smart/smart_icon.svg')" class="is-80x80"></b-image>
+-			</div>
+-			<div class="buttons is-flex is-flex-shrink-0 is-flex-direction-row-reverse">
+-				<b-button class="mb-0" rounded size="is-small" type="is-primary" @click="goToDiscord">{{
+-					$t('In development')
+-					}}
+-				</b-button>
+-			</div>
+-		</div>
+-
+-	</div>
+-</template>
+-
+-<script>
+-export default {
+-	name: "smart-block",
+-	methods: {
+-		goToDiscord() {
+-			this.$buefy.dialog.confirm({
+-				title: ' ',
+-				message: this.$t('Have an idea? Shoot it on Discord!'),
+-				hasIcon: true,
+-				icon: 'discord',
+-				confirmText: this.$t('Go'),
+-				cancelText: this.$t('Cancel'),
+-				onConfirm: () => {
+-					window.open('https://discord.gg/Gx4BCEtHjx', '_blank', 'noopener');
+-				}
+-			})
+-		}
+-	},
+-}
+-</script>
+-
+-<style lang="scss" scoped>
+-._box {
+-	height: 10rem;
+-	padding: 1rem 1.25rem;
+-	padding-top: 1.125rem;
+-	margin-bottom: 1rem;
+-
+-	._notice-content-text {
+-		margin-right: 2rem;
+-		margin-left: 2rem;
+-	}
+-}
+-.des{
+-	line-height: 1.5em;
+-}
+-</style>
+diff --git a/src/views/Home.vue b/src/views/Home.vue
+index 455d5d3..89f1345 100644
+--- a/src/views/Home.vue
++++ b/src/views/Home.vue
+@@ -66,7 +66,6 @@ export default {
+     }
+     if (sessionStorage.getItem('fromWelcome')) {
+       this.$messageBus('global_newvisit')
+-      this.rssConfirm()
+       // one-off consumption
+       sessionStorage.removeItem('fromWelcome')
+     }
+@@ -202,27 +201,6 @@ export default {
+       }
+     },
+ 
+-    // one-off
+-    rssConfirm() {
+-      this.$buefy.dialog.confirm({
+-        title: this.$t('Show news feed from CasaOS Blog'),
+-        message: this.$t('CasaOS dashboard will get the the latest news feed of https://blog.casaos.io via Internet, which might leave your visit records to the site. Do you accept?'),
+-        type: 'is-dark',
+-        confirmText: this.$t('Accept'),
+-        cancelText: this.$t('Cancel'),
+-        onConfirm: async () => {
+-          const systemConfig = await this.$api.users.getCustomStorage('system')
+-          const barData = systemConfig.data.data
+-          barData.rss_switch = true
+-          const saveRes = await this.$api.users.setCustomStorage('system', barData)
+-          this.barData = saveRes.data.data
+-        },
+-        onCancel: () => {
+-          this.barData.rss_switch = false
+-        },
+-      })
+-    },
+-
+     // show storage settings modal
+     async showStorageManagerPanelModal() {
+       this.$messageBus('widget_storagemanager')

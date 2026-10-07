@@ -27,6 +27,8 @@ stdenv.mkDerivation (finalAttrs: {
     ./patches/0002-vue-config-reproducible-env.patch
     ./patches/0003-send-bearer-authorization.patch
     ./patches/0004-storage-panel-finally-typo.patch
+    ./patches/0005-feat-events-present-the-service-credential-when-regi.patch
+    ./patches/0006-chore-ui-drop-the-IceWhale-community-links-and-the-b.patch
   ];
 
   nativeBuildInputs = [
