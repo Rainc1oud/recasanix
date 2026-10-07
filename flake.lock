@@ -3,11 +3,11 @@
     "casaos-ui": {
       "flake": false,
       "locked": {
-        "lastModified": 1791397714,
-        "narHash": "sha256-HkmginiPT6pYikgD86DEjRlEPAN8ZYL7L152UzGVl50=",
+        "lastModified": 1791404581,
+        "narHash": "sha256-sZP/LxRZKrS7ihP5IqirYKp+A1f5PBhsOc0MsxtXgCg=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-UI-EF",
-        "rev": "438c70571f2a81f501ad969f125da265353de6cd",
+        "rev": "6012c08b816748e9ffbc9c1b97440816d118640a",
         "type": "github"
       },
       "original": {
@@ -91,11 +91,11 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1791397724,
-        "narHash": "sha256-yAvHncPiN6F6vCSug0Ql1W7S8U9MIxVToNn6shHxiwA=",
+        "lastModified": 1791404590,
+        "narHash": "sha256-iBgph0m8FEHgQS2qyul7aqMsHL6aBV7tbh+0R69uoI8=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-EF",
-        "rev": "6253e7b07315e301a182ee5ca37102a5a300422a",
+        "rev": "6beddd829660b0821b6e4fabfaca0f639df5b034",
         "type": "github"
       },
       "original": {
@@ -108,11 +108,11 @@
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1791397728,
-        "narHash": "sha256-+GluOmB+uA7C6T7g0mSqrbqVhEc3Tlfvd6kRar9eG8c=",
+        "lastModified": 1791404594,
+        "narHash": "sha256-5iBHXeQvxNwZn10TCNUdsgowvjVBl5eeu/QjiPPaDUw=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-AppManagement-EF",
-        "rev": "60851622d84585ca7d929872d23f20d387c6a6a1",
+        "rev": "2a9224c20b0cea4b18d9ade730b2cd9db3a91524",
         "type": "github"
       },
       "original": {
@@ -141,11 +141,11 @@
     "recasaos-message-bus": {
       "flake": false,
       "locked": {
-        "lastModified": 1791397731,
-        "narHash": "sha256-TaNjPPKzamoZ+l42vR3cOYhy4sCrl4UFPLnEGS0/Ans=",
+        "lastModified": 1791404597,
+        "narHash": "sha256-hL/2jhT1gcpczJ72nAZZxIzJpLsV2uUyPl6mFaUwlzU=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-MessageBus-EF",
-        "rev": "2091113560963bb7fee5fe5773aeb01961d89428",
+        "rev": "980469e85831b2f0a7a98514c71c18327241fa88",
         "type": "github"
       },
       "original": {
@@ -158,11 +158,11 @@
     "recasaos-user-service": {
       "flake": false,
       "locked": {
-        "lastModified": 1791397735,
-        "narHash": "sha256-M78bcu/EFsA9oDg3gY9qNUM53PkQoGkmtgu0X0niOqk=",
+        "lastModified": 1791404600,
+        "narHash": "sha256-enRM/IwWxMHuE48bU7IZbKJ7Tm5meXZuhYAh/NMX+Uc=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-UserService-EF",
-        "rev": "180380da6a345a8fdbdb1c6e99f23c60b2498535",
+        "rev": "4b195938c5dd297e6eab05359f095fb7b6a658cf",
         "type": "github"
       },
       "original": {
