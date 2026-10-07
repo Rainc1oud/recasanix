@@ -12,12 +12,6 @@ mkCasaosGo {
   version = "0.4.16";
   inherit src;
   vendorHash = "sha256-P01D/KX2FAsJXvZrRXqc1rFyGvZJmzZ/6GuyKii1V2A=";
-  patches = [
-    ./patches/0001-accept-bearer-authorization.patch
-    ./patches/0002-feat-gatewayclient-service-credential-helpers-for-in.patch
-    ./patches/0003-feat-service-present-the-service-credential-to-the-m.patch
-    ./patches/0004-security-route-loopback-needs-the-gateway-service-cr.patch
-  ];
   subPackages = [ "." ];
   renameBinaries.CasaOS-AppManagement = "casaos-app-management";
   repo = components.recasaos-app-management.repo;

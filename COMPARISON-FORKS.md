@@ -110,7 +110,7 @@ Not taken: telemetry, auto-update, apt updates, installer, LocalStorage, mergerf
 
 ## PR series to EF (status 2026-10-07)
 
-Branches local in `~/devel/github.com/ppenguin/ReCasaOS-EF/<repo>-EF` (forks `ppenguin/<repo>-EF`), not pushed. Carried here as patches until merged (AGENTS.md §5). Verified: Go unit tests red→green per commit; VM check `service-auth` (T12).
+Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCasaOS-EF/`). Built into `recasanix-preview` until merged (AGENTS.md §2). Verified: Go unit tests red→green per commit; VM check `service-auth` (T12).
 
 | Order | Repo | Branch | Content | Needs | Harvest # |
 |---|---|---|---|---|---|
@@ -137,22 +137,33 @@ Branches local in `~/devel/github.com/ppenguin/ReCasaOS-EF/<repo>-EF` (forks `pp
 - Websocket subscriptions: T-1..T-3 (tickets instead of URL tokens, which EF refuses). Not in series: our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
 - Harvest #3 (Samba account shares): S-A, S-B, S-C0, S-C done, verified by T13 (backend, smbclient) and T14 (browser). Open: EF's *managed* main template still has `map to guest = bad user` (a refused login is denied instead of prompted) → follow-up PR, needs a managed-template migration. EF UI drops the whole app grid (built-in Files included) when the app-grid request fails → follow-up PR.
 
-### Open upstream PRs (2026-10-07)
+### Upstream PRs (2026-10-07)
 
-- MessageBus startup races: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/3
-- MessageBus unix-socket identity (Host: unix): https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/4
-- ReCasaOS service credential: https://github.com/EdmundFu-233/ReCasaOS/pull/151
-- UserService service credential: https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/19
-- AppManagement service credential: https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/5
-- UI register-ui-events credential: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/6
-- MessageBus loopback needs credential: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/5
-- AppManagement loopback needs credential: https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/6
-- ReCasaOS power actions: https://github.com/EdmundFu-233/ReCasaOS/pull/152
-- UI drop IceWhale links / news feed: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/7
-- S-A include-only mode: https://github.com/EdmundFu-233/ReCasaOS/pull/153
-- S-B share accounts: https://github.com/EdmundFu-233/ReCasaOS/pull/154
-- S-C0 shares never anonymous: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/8
-- S-C share accounts UI: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/9
-- T-1 subscription tickets: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/6
-- T-2 UI ticket: https://github.com/EdmundFu-233/ReCasaOS-UI/pull/10
-- T-3 subscriptions need a ticket: https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/7
+| PR | Link | State |
+|---|---|---|
+| MessageBus startup races | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/3 | open |
+| MessageBus unix-socket identity (Host: unix) | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/4 | open |
+| ReCasaOS service credential | https://github.com/EdmundFu-233/ReCasaOS/pull/151 | merged |
+| UserService service credential | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/19 | open |
+| AppManagement service credential | https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/5 | open |
+| UI register-ui-events credential | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/6 | open |
+| MessageBus loopback needs credential | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/5 | open |
+| AppManagement loopback needs credential | https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/6 | open |
+| ReCasaOS power actions | https://github.com/EdmundFu-233/ReCasaOS/pull/152 | merged |
+| UI drop IceWhale links / news feed | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/7 | open |
+| S-A include-only mode | https://github.com/EdmundFu-233/ReCasaOS/pull/153 | merged |
+| S-B share accounts | https://github.com/EdmundFu-233/ReCasaOS/pull/154 | merged |
+| S-C0 shares never anonymous | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/8 | open |
+| S-C share accounts UI | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/9 | open |
+| T-1 subscription tickets | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/6 | open |
+| T-2 UI ticket | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/10 | open |
+| T-3 subscriptions need a ticket | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/7 | open |
+| MessageBus accept Bearer | https://github.com/EdmundFu-233/ReCasaOS-MessageBus/pull/8 | open |
+| AppManagement accept Bearer | https://github.com/EdmundFu-233/ReCasaOS-AppManagement/pull/7 | open |
+| UI send Bearer | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/11 | open |
+| UI reproducible build env | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/12 | open |
+| UI storage `.finally` typo | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/13 | open |
+| UserService drop local-storage listener | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/20 | open |
+| ReCasaOS bash from PATH | https://github.com/EdmundFu-233/ReCasaOS/pull/155 | open |
+
+- consumed via `recasanix-preview` branches of the forks (`nix/pins/preview.json`) until merged

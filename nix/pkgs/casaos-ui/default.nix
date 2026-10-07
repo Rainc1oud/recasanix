@@ -24,14 +24,6 @@ stdenv.mkDerivation (finalAttrs: {
   # stop webpack from stringifying the whole build environment into the bundle.
   patches = [
     ./patches/0001-disable-self-update.patch
-    ./patches/0002-vue-config-reproducible-env.patch
-    ./patches/0003-send-bearer-authorization.patch
-    ./patches/0004-storage-panel-finally-typo.patch
-    ./patches/0005-feat-events-present-the-service-credential-when-regi.patch
-    ./patches/0006-chore-ui-drop-the-IceWhale-community-links-and-the-b.patch
-    ./patches/0007-fix-shares-never-ask-for-an-anonymous-share.patch
-    ./patches/0008-feat-shares-share-accounts-and-who-may-open-a-share.patch
-    ./patches/0009-feat-events-subscribe-to-the-message-bus-with-a-tick.patch
   ];
 
   nativeBuildInputs = [

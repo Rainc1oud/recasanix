@@ -69,7 +69,7 @@ pkgs.testers.runNixOSTest {
     token = login["data"]["token"]["access_token"]
     # The root service only accepts `Authorization: Bearer <token>` (user-service also takes the bare
     # token). The pinned UI used to send the bare token, so every root-service call from the browser
-    # was a 401 and login looked dead; the UI is patched to send Bearer (casaos-ui patch 0003).
+    # was a 401 and login looked dead; the UI is patched to send Bearer (PR ReCasaOS-UI#11).
     def api(method, path):
         return machine.succeed(
             f"curl -s -o /dev/null -w '%{{http_code}}' -X {method} -H 'Authorization: Bearer {token}' http://localhost{path}"

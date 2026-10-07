@@ -1,6 +1,8 @@
-# T7 — the flake inputs must be exactly the revisions upstream's release/components.lock.json (in the
-# pinned root repository) names. Fails when someone updates one component without the others, e.g. a
-# bare `nix flake update` or `nix flake update recasaos-gateway`: that floats it to its branch head.
+# T7 — pins match the pin of record.
+# - component without open PRs: flake.lock rev == rev in upstream's release/components.lock.json
+# - component with open PRs (nix/pins/preview.json): preview base == that rev, flake.lock rev == preview head
+# - root: base = pin of record itself (no independent source in Nix); checked: input = head
+# Fails on a bare `nix flake update`, a single-input update, or a preview branch rebuilt by hand.
 {
   lib,
   pkgs,
@@ -10,6 +12,9 @@ let
   rows = lib.mapAttrsToList (name: c: {
     inherit name;
     inherit (c) rev inputRev;
+    base = if c.preview == null then "-" else toString (c.preview.base or "-");
+    head = if c.preview == null then "-" else toString (c.preview.head or "-");
+    isPreview = c.preview != null;
   }) components;
 in
 pkgs.runCommand "pin-drift"
@@ -20,21 +25,20 @@ pkgs.runCommand "pin-drift"
   }
   ''
     fail=0
-    while IFS=$'\t' read -r name rev input; do
-      case "$rev" in
-        [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
-        *) echo "PIN DRIFT: $name has no 40-hex revision in components.lock.json: '$rev'"; fail=1 ;;
-      esac
-      if [ "$rev" != "$input" ]; then
-        echo "PIN DRIFT: $name — components.lock.json wants $rev, flake.lock has $input"
-        fail=1
+    hex40='^[0-9a-f]{40}$'
+    while IFS=$'\t' read -r name rev input preview base head; do
+      [[ $rev =~ $hex40 ]] || { echo "PIN DRIFT: $name — no 40-hex rev in components.lock.json: '$rev'"; fail=1; }
+      if [ "$preview" = true ]; then
+        [ "$base" = "$rev" ] || { echo "PIN DRIFT: $name — preview base $base, lock wants $rev"; fail=1; }
+        [ "$head" = "$input" ] || { echo "PIN DRIFT: $name — flake.lock $input, preview head $head"; fail=1; }
+      else
+        [ "$rev" = "$input" ] || { echo "PIN DRIFT: $name — lock wants $rev, flake.lock has $input"; fail=1; }
       fi
-    done < <(jq -r '.[] | [.name, .rev, .inputRev] | @tsv' "$rowsPath")
+    done < <(jq -r '.[] | [.name, .rev, .inputRev, (.isPreview | tostring), .base, .head] | @tsv' "$rowsPath")
     if [ "$fail" -ne 0 ]; then
       echo
-      echo "Run nix/pins/update.sh to re-pin every component to the lock file of the pinned root repository."
-      echo "(Never update a single component input on its own; see the comment in flake.nix.)"
+      echo "Run nix/pins/update.sh (re-pins every component, rebuilds the preview branches)."
       exit 1
     fi
-    echo "all $(jq length "$rowsPath") pins match components.lock.json" | tee $out
+    echo "all $(jq length "$rowsPath") pins match (previews: base = lock rev, input = preview head)" | tee $out
   ''

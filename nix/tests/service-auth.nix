@@ -3,8 +3,8 @@
 # and app management skip the user token only for an in-stack caller — one that presents the
 # gateway's per-start service credential (/run/casaos/gateway.token, root-only), or that really
 # arrived on the bus's root-only unix socket. Upstream PRs, carried as patches until merged:
-# recasaos-message-bus 0004–0006, recasaos-app-management 0002–0004, recasaos-user-service 0002–0003,
-# recasaos 0004–0005, casaos-ui 0005. Also the power actions (recasaos 0006): the UI's shutdown
+# PRs: ReCasaOS-MessageBus#4, ReCasaOS-MessageBus#5, ReCasaOS-AppManagement#6, ReCasaOS-UserService#19, ReCasaOS-AppManagement#5, ReCasaOS-UI#6,
+# ReCasaOS#151 (merged). Power actions: ReCasaOS#152 (merged): the UI's shutdown
 # button reaches systemd.
 { pkgs, modules }:
 pkgs.testers.runNixOSTest {
@@ -89,7 +89,7 @@ pkgs.testers.runNixOSTest {
 
     # A browser subscribes with a one-use ticket (POST /v2/message_bus/ticket with its token sets an
     # HttpOnly cookie; the WebSocket handshake redeems it): no subscription without one, and no token in
-    # a URL. message-bus patches 0007-0008.
+    # a URL. PRs ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7.
     with subtest("message bus: subscriptions need a one-use ticket"):
         machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
         machine.wait_for_unit("casaos-user-service.service")

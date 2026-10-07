@@ -3,16 +3,17 @@
     "casaos-ui": {
       "flake": false,
       "locked": {
-        "lastModified": 1789535060,
-        "narHash": "sha256-iNypFXBRvRBYwbQyep95D26t3aLtYPx8qjMmZpC8aRI=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-UI",
-        "rev": "0d6cf15eae7c94aa097b8940f947b149ce844ed7",
+        "lastModified": 1791397714,
+        "narHash": "sha256-HkmginiPT6pYikgD86DEjRlEPAN8ZYL7L152UzGVl50=",
+        "owner": "ppenguin",
+        "repo": "ReCasaOS-UI-EF",
+        "rev": "438c70571f2a81f501ad969f125da265353de6cd",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-UI",
+        "owner": "ppenguin",
+        "ref": "recasanix-preview",
+        "repo": "ReCasaOS-UI-EF",
         "type": "github"
       }
     },
@@ -90,32 +91,34 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1789677349,
-        "narHash": "sha256-sl+4eOcSIt0QYRoBFshA7W89y0qmYeBpuHmSnggvE3U=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS",
-        "rev": "5db5a4fd82dbb6728d3277ceecfb1522ff9350df",
+        "lastModified": 1791397724,
+        "narHash": "sha256-yAvHncPiN6F6vCSug0Ql1W7S8U9MIxVToNn6shHxiwA=",
+        "owner": "ppenguin",
+        "repo": "ReCasaOS-EF",
+        "rev": "6253e7b07315e301a182ee5ca37102a5a300422a",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS",
+        "owner": "ppenguin",
+        "ref": "recasanix-preview",
+        "repo": "ReCasaOS-EF",
         "type": "github"
       }
     },
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1789662800,
-        "narHash": "sha256-iVbE88+qqkAUbjSYjmYU3F9gotuV2nJpM8RDIc+JmDo=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-AppManagement",
-        "rev": "6fe9af7111653d041d65460b19b61f1cdf7f0673",
+        "lastModified": 1791397728,
+        "narHash": "sha256-+GluOmB+uA7C6T7g0mSqrbqVhEc3Tlfvd6kRar9eG8c=",
+        "owner": "ppenguin",
+        "repo": "ReCasaOS-AppManagement-EF",
+        "rev": "60851622d84585ca7d929872d23f20d387c6a6a1",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-AppManagement",
+        "owner": "ppenguin",
+        "ref": "recasanix-preview",
+        "repo": "ReCasaOS-AppManagement-EF",
         "type": "github"
       }
     },
@@ -138,32 +141,34 @@
     "recasaos-message-bus": {
       "flake": false,
       "locked": {
-        "lastModified": 1789662800,
-        "narHash": "sha256-ZehfmLN4vVtGr0fh6xblGkO9Sfuc53eNxCvLmodZEvs=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-MessageBus",
-        "rev": "f6666910c8c634c7529c2c47bcb1edc6df4ca92d",
+        "lastModified": 1791397731,
+        "narHash": "sha256-TaNjPPKzamoZ+l42vR3cOYhy4sCrl4UFPLnEGS0/Ans=",
+        "owner": "ppenguin",
+        "repo": "ReCasaOS-MessageBus-EF",
+        "rev": "2091113560963bb7fee5fe5773aeb01961d89428",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-MessageBus",
+        "owner": "ppenguin",
+        "ref": "recasanix-preview",
+        "repo": "ReCasaOS-MessageBus-EF",
         "type": "github"
       }
     },
     "recasaos-user-service": {
       "flake": false,
       "locked": {
-        "lastModified": 1789677301,
-        "narHash": "sha256-CVtC/OSK0BHWFxn0/bUgZqOYvgqcLKlWWdM7vU4JV9I=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-UserService",
-        "rev": "1ce4d9d4617500a48e3e31d22d965525f2555a5a",
+        "lastModified": 1791397735,
+        "narHash": "sha256-M78bcu/EFsA9oDg3gY9qNUM53PkQoGkmtgu0X0niOqk=",
+        "owner": "ppenguin",
+        "repo": "ReCasaOS-UserService-EF",
+        "rev": "180380da6a345a8fdbdb1c6e99f23c60b2498535",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-UserService",
+        "owner": "ppenguin",
+        "ref": "recasanix-preview",
+        "repo": "ReCasaOS-UserService-EF",
         "type": "github"
       }
     },

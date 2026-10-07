@@ -61,7 +61,7 @@ if not storage.get("access_token"):
     failed.append("no access_token left in localStorage")
 if unauthorized:
     failed.append(f"{len(unauthorized)} request(s) answered 401")
-# the subscription is authenticated with a one-use ticket (message-bus patches 0007-0008, UI 0009):
+# the subscription is authenticated with a one-use ticket (PRs ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7, ReCasaOS-UI#10):
 # without one the bus refuses the handshake and the dashboard silently gets no events
 if not bus_frames:
     failed.append("no message bus subscription: the socket.io WebSocket never received a frame")

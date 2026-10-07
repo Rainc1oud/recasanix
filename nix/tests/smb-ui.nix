@@ -1,5 +1,5 @@
 # T14 — share accounts and share access through the real web UI (headless Chromium), on top of the
-# backend checked by smb-shares (T13). UI patches 0007–0008 (upstream PRs).
+# backend checked by smb-shares (T13). PRs ReCasaOS-UI#8, ReCasaOS-UI#9.
 { pkgs, modules }:
 let
   python = pkgs.python3.withPackages (ps: [ ps.playwright ]);

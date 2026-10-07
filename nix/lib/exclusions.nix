@@ -14,6 +14,8 @@
 #              sysroot, others (build/scripts/…) are simply never installed. Existence is asserted.
 #   patch    — source or script patched to remove a caller or a host-management function. The patch
 #              lives in nix/pkgs/<component>/patches/ and fails to apply loudly on an upstream bump.
+#   pr       — fixed by an upstream PR; built from our fork's preview branch until merged
+#              (nix/pins/preview.json, nix/pins/update.sh), then plain upstream.
 #   finding  — spotted, not shipped or not reachable, recorded for review (may carry a TODO).
 #
 # `caller` states whether the route / UI affordance / script function that invoked the excluded
@@ -66,20 +68,20 @@ rec {
     };
     casaos-message-bus = perService { name = "message-bus"; } ++ [
       {
-        path = "route/*.go: Authorization header parsing (patches/0001-accept-bearer-authorization.patch)";
-        kind = "patch";
+        path = "route/*.go: Authorization header parsing";
+        kind = "pr";
         why = "Not host management — an upstream integration break: this service takes the whole Authorization header value as the token, so `Bearer <token>` (the form the root service requires and the fork calls preferred) is a 401 here while the bare form is a 401 at the root service. No single header satisfied both; the UI showed a first login followed by an immediate logout. Invisible to curl from inside the machine because this service skips authentication for loopback clients.";
         replacedBy = "The service strips an optional `Bearer ` prefix (bare tokens still work).";
-        caller = "n/a — found by the browser check ui-login (T-UI). The loopback auth skip itself is closed by the upstream PR series in patches/0004–0006 (unix-socket identity from the connection, loopback needs the gateway service credential); check service-auth (T12).";
+        caller = "n/a — found by ui-login (T10). PR ReCasaOS-MessageBus#8. Loopback auth skip: closed by PRs ReCasaOS-MessageBus#4, ReCasaOS-MessageBus#5; check service-auth (T12).";
       }
     ];
     casaos-user-service = perService { name = "user-service"; } ++ [
       {
         path = "main.go: go route.EventListen()";
-        kind = "patch";
+        kind = "pr";
         why = "Subscribes to the message bus source `local-storage`, which belonged to the separate CasaOS-LocalStorage service that ReCasaOS does not ship (no storage manager is part of the pinned ReCasaOS set: the UI's disk panels have no backend). Nothing registers it, the bus answers 400 and the loop retries every second (1000 times) — pure journal noise.";
         replacedBy = "Nothing; the events it would persist do not exist.";
-        caller = "n/a — no UI or API depends on it (patches/0001-drop-local-storage-listener.patch)";
+        caller = "n/a — no UI or API depends on it. PR ReCasaOS-UserService#20";
       }
     ];
     casaos-app-management =
@@ -89,11 +91,11 @@ rec {
       }
       ++ [
         {
-          path = "route/*.go: Authorization header parsing (patches/0001-accept-bearer-authorization.patch)";
-          kind = "patch";
+          path = "route/*.go: Authorization header parsing";
+          kind = "pr";
           why = "Not host management — same upstream integration break as in message-bus: the whole Authorization header value is taken as the token, so `Bearer <token>` (required by the root service) was a 401 here. Invisible from inside the machine because this service skips authentication for loopback clients.";
           replacedBy = "The service strips an optional `Bearer ` prefix (bare tokens still work).";
-          caller = "n/a — found by the browser check ui-login (T-UI).";
+          caller = "n/a — found by ui-login (T10). PR ReCasaOS-AppManagement#7";
         }
         {
           path = "route/v1/docker.go: PutDockerDaemonConfiguration";
@@ -147,8 +149,8 @@ rec {
         caller = "n/a";
       }
       {
-        path = "service/shares.go, service/system.go: absolute /bin/bash (patches/0003-bash-from-path.patch)";
-        kind = "patch";
+        path = "service/shares.go, service/system.go: absolute /bin/bash";
+        kind = "pr";
         why = "Absolute /bin/bash does not exist on NixOS. shares.go spawned it directly; system.go went through CasaOS-Common's command.OnlyExec, which hardcodes it too, so every helper.sh call would fail. Both now run bare `bash`, resolved through the unit's PATH.";
         replacedBy = "systemd.services.casaos.path contains bash (task 3.1).";
         caller = "n/a";
@@ -157,14 +159,14 @@ rec {
         path = "helper.sh: RestartSMBD (systemctl restart smbd)";
         kind = "finding";
         why = "Restarts smbd (Debian unit name; NixOS calls it samba-smbd.service) after the shares service — hot state — has generated /etc/samba/smb.casa.conf and validated it with testparm. That generate-validate-reload pattern is the intended architecture, so this stays.";
-        replacedBy = "Kept. `smbd.service` is an alias of samba-smbd.service; the store smb.conf includes /etc/samba/smb.casa.conf, which the root service publishes in include-only mode (`SambaMainConfig = external`, patches/0007, upstream PR) and regenerates from its share database at every start, so the fragment needs no persistence. Share accounts: patches/0008 (upstream PR); passdb on the state partition.";
+        replacedBy = "Kept. `smbd.service` is an alias of samba-smbd.service; the store smb.conf includes /etc/samba/smb.casa.conf, which the root service publishes in include-only mode (`SambaMainConfig = external`, upstream, merged: ReCasaOS#153) and regenerates from its share database at every start, so the fragment needs no persistence. Share accounts: upstream, merged ReCasaOS#154; passdb on the state partition.";
         caller = "yes — exercised end to end by check smb-shares (T13)";
       }
       {
         path = "service/system.go: SystemReboot / SystemShutdown (`init 6` / `init 0`)";
-        kind = "patch";
+        kind = "pr";
         why = "UI power buttons. Reboot and shutdown are legitimate appliance actions, but the mechanism (SysV `init`) does not exist on NixOS, and a failure was answered with 200.";
-        replacedBy = "`systemctl --no-block reboot|poweroff`, failures answered with 500 (patches/0006, upstream PR; ported from the ReCasaOS-org fork). systemd is on the unit's path.";
+        replacedBy = "`systemctl --no-block reboot|poweroff`, failures answered with 500 (upstream, merged: ReCasaOS#152; ported from the ReCasaOS-org fork). systemd is on the unit's path.";
         caller = "yes — PutSystemState is kept and now works; check service-auth (T12) powers the VM off through the API";
       }
       {
@@ -192,10 +194,10 @@ rec {
     casaos-ui = [
       {
         path = "src/service/service.js, src/components/filebrowser/FilePanel.vue, …: Authorization header";
-        kind = "patch";
+        kind = "pr";
         why = "Not host management — an upstream integration break found while onboarding: the pinned UI sends the bare access token in `Authorization`, but the root service only accepts `Bearer <token>` (user-service tolerates both, upstream's declared 'compatibility hold'). Every root-service call from the browser was a 401 and login looked dead.";
         replacedBy = "The UI sends `Bearer <token>` everywhere (the form upstream's own notes say the UI should move to). Not fixed: the wallpaper upload still puts the token in a `?token=` query, which the fork rejects — report upstream.";
-        caller = "n/a (patches/0003-send-bearer-authorization.patch)";
+        caller = "n/a. PR ReCasaOS-UI#11";
       }
       {
         path = "src/components/TopBar.vue: Update block, checkVersion";
@@ -206,9 +208,9 @@ rec {
       }
       {
         path = "src/components/BrandBar.vue: news feed (parseFeed); ContactBar, SmartBlock, share/wiki/awesome links";
-        kind = "patch";
+        kind = "pr";
         why = "Not host management — phone-home and vendor channels. When the news feed was enabled, BrandBar read /var/lib/casaos/baseinfo.conf (device identifiers), base64-encoded it with the UI language and sent it as a query key to blog-casaos.zimaspace.com on every dashboard load. The other affordances sent users to IceWhale's Discord, issue tracker, wiki and social sharing for a project IceWhale no longer ships.";
-        replacedBy = "Nothing; the brand bar shows the logo only. Upstream PR (patches/0006), not a local-only patch.";
+        replacedBy = "Nothing; the brand bar shows the logo only. PR ReCasaOS-UI#7.";
         caller = "yes — the feed, its settings switch and the post-onboarding consent dialog are removed with it; the app icon CDN and App Store catalogue are kept (functional)";
       }
     ];
@@ -264,8 +266,8 @@ rec {
       section of [DEVELOPMENT.md](../DEVELOPMENT.md) for the policy; this file is the review artefact
       for upstream bumps and for the conversation with the ReCasaOS maintainer.
 
-      Kinds: `path` = not shipped (existence asserted), `patch` = patched out of source/scripts,
-      `finding` = recorded for review. `TODO` in the last column is an open item, not a decision.
+      Kinds: `path` = not shipped (existence asserted), `patch` = local patch (nix/pkgs/*/patches), `pr` = fixed by an
+      upstream PR, built from our preview branch until merged (nix/pins/preview.json), `finding` = recorded for review. `TODO` in the last column is an open item, not a decision.
 
       | Component | Path | Kind | Why | What replaces it | Caller disabled? |
       |---|---|---|---|---|---|

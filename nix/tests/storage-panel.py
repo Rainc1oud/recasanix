@@ -4,7 +4,7 @@ Run by nix/tests/storage-manager.nix against a booted appliance: log in, press t
 widget, and read the panel. Phase "blank" (two blank disks, no pool): the Storage tab shows the system
 volume, the Drive tab shows both blank disks, and pressing Create Storage → Format and create actually
 creates one — a success toast, and the panel returns to the list (not stuck on "Creation in progress",
-UI patch 0004). Phase "pool" (both disks now used, one JBOD pool made via the API for the second disk):
+PR ReCasaOS-UI#13). Phase "pool" (both disks now used, one JBOD pool made via the API for the second disk):
 the Storage tab shows the pool.
 
 In both phases the three requests the panel makes must be answered (not 404), which is the whole
@@ -83,7 +83,7 @@ try:
             toast.wait_for(state="visible", timeout=15000)
             toast_text = toast.inner_text()
             # the actual create takes a few seconds (mkfs, udev, bringing the pool online); give the
-            # panel time to refresh before checking it is not stuck (UI patch 0004's whole point)
+            # panel time to refresh before checking it is not stuck (ReCasaOS-UI#13's whole point)
             page.wait_for_timeout(8000)
             creating = "Creation in progress" in modal.inner_text()
             storage_tab = modal.inner_text()
@@ -115,7 +115,7 @@ if phase == "blank":
     check("System" in drive_tab, "the Drive tab does not show the system drive")
     print("--- toast shown after creating ---\n" + str(toast_text))
     check(toast_text and "success" in toast_text.lower(), "creating a storage did not show a success toast")
-    check(not creating, "the panel is stuck on 'Creation in progress' after creating (UI patch 0004)")
+    check(not creating, "the panel is stuck on 'Creation in progress' after creating (PR ReCasaOS-UI#13)")
     check("recasanix-data" in str(storage_tab), "the Storage tab does not show the newly created pool")
 elif phase == "pool":
     check("recasanix-data" in storage_tab, "the Storage tab does not show the pool")

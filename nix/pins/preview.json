@@ -1,0 +1,65 @@
+{
+  "branch": "recasanix-preview",
+  "components": {
+    "recasaos": {
+      "upstream": "EdmundFu-233/ReCasaOS",
+      "fork": "ppenguin/ReCasaOS-EF",
+      "prs": [
+        "fix/bash-from-path"
+      ],
+      "base": "456bf16d2653bd0ffc6996ce5abdbab10d0f914a",
+      "head": "6253e7b07315e301a182ee5ca37102a5a300422a"
+    },
+    "recasaos-message-bus": {
+      "upstream": "EdmundFu-233/ReCasaOS-MessageBus",
+      "fork": "ppenguin/ReCasaOS-MessageBus-EF",
+      "prs": [
+        "fix/subscriptions-before-start",
+        "fix/unix-socket-identity",
+        "fix/loopback-needs-service-credential",
+        "feat/subscription-tickets",
+        "fix/subscriptions-need-a-ticket",
+        "fix/accept-bearer-authorization"
+      ],
+      "base": "f6666910c8c634c7529c2c47bcb1edc6df4ca92d",
+      "head": "2091113560963bb7fee5fe5773aeb01961d89428"
+    },
+    "recasaos-app-management": {
+      "upstream": "EdmundFu-233/ReCasaOS-AppManagement",
+      "fork": "ppenguin/ReCasaOS-AppManagement-EF",
+      "prs": [
+        "fix/accept-bearer-authorization",
+        "feat/message-bus-service-credential",
+        "fix/loopback-needs-service-credential"
+      ],
+      "base": "6fe9af7111653d041d65460b19b61f1cdf7f0673",
+      "head": "60851622d84585ca7d929872d23f20d387c6a6a1"
+    },
+    "recasaos-user-service": {
+      "upstream": "EdmundFu-233/ReCasaOS-UserService",
+      "fork": "ppenguin/ReCasaOS-UserService-EF",
+      "prs": [
+        "fix/drop-local-storage-listener",
+        "feat/message-bus-service-credential"
+      ],
+      "base": "f25e495df180238e7937104f79a6e55b97bcd208",
+      "head": "180380da6a345a8fdbdb1c6e99f23c60b2498535"
+    },
+    "casaos-ui": {
+      "upstream": "EdmundFu-233/ReCasaOS-UI",
+      "fork": "ppenguin/ReCasaOS-UI-EF",
+      "prs": [
+        "fix/send-bearer-authorization",
+        "fix/reproducible-build-env",
+        "fix/storage-create-finally",
+        "feat/message-bus-service-credential",
+        "chore/remove-upstream-community-links",
+        "fix/shares-never-anonymous",
+        "feat/share-accounts-ui",
+        "feat/bus-subscription-ticket"
+      ],
+      "base": "0d6cf15eae7c94aa097b8940f947b149ce844ed7",
+      "head": "438c70571f2a81f501ad969f125da265353de6cd"
+    }
+  }
+}

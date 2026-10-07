@@ -167,7 +167,13 @@ in
             recasanix-accounts-sync = {
               description = "Mirror the account databases to the hot-state filesystem";
               wantedBy = [ "multi-user.target" ]; # also once at boot
-              unitConfig.RequiresMountsFor = mp;
+              unitConfig = {
+                RequiresMountsFor = mp;
+                # one `useradd` = a burst of /etc changes (passwd, shadow, group, locks, backups) → path
+                # triggers; the default start limit (5/10 s) then stopped mirroring for good. Cheap, idempotent
+                # copy → no limit.
+                StartLimitIntervalSec = 0;
+              };
               serviceConfig = {
                 Type = "oneshot";
                 ExecStart = lib.getExe accountsSync;

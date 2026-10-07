@@ -3,7 +3,7 @@
 # through the API. Asserted with a real smbd and smbclient: the account gets in and owns what it writes,
 # other accounts, guests and wrong passwords do not; system accounts cannot be enrolled; the fragment
 # is regenerated from the share database; accounts and their passwords survive a reboot.
-# Upstream PRs carried as recasaos patches 0007–0008.
+# Upstream: ReCasaOS#153, #154 (merged).
 { pkgs, modules }:
 pkgs.testers.runNixOSTest {
   name = "recasanix-smb-shares";

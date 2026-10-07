@@ -3,7 +3,7 @@
 Run by nix/tests/smb-ui.nix against a booted appliance: log in, open Files, go to Shared, open
 "Share accounts" and add an account; then, in /DATA, right-click the folder "Media", choose Share, pick
 "Only one account" and the new account, and press Share. The test script then checks through the API
-that the share exists and is restricted to that account (UI patches 0007–0008).
+that the share exists and is restricted to that account (PRs ReCasaOS-UI#8, ReCasaOS-UI#9).
 """
 
 import sys

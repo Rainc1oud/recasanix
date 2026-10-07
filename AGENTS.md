@@ -43,7 +43,7 @@ These were settled with the product owner. If a task seems to require changing o
 | Storage (data pool) | **btrfs** (in-tree, native RAID1 mirror, snapshots). ZFS stays a documented, commented-out alternative that must remain cheap to test. |
 | Storage manager | The UI's storage widget is served by **`recasanix-storage`** (`services/recasanix-storage`, our own Go code): the routes and shapes of upstream's CasaOS-LocalStorage, which is **not** adopted (host-management pattern, ext4-only, `bash -c` with request data, rclone). It **can create storage** on a blank disk (JBOD: btrfs single profile, no partitioning) — formatting/removing an *existing* storage and merging remain refused with 501. Every write re-validates its target against a fresh disk listing; nothing from a request reaches a command unchecked. The rest (mirror as a UI choice, replace, degraded, scrub) is the Phase 6 storage layer, on the same routes. See [docs/storage-manager.md](./docs/storage-manager.md). |
 | Container runtime | **Docker** (`virtualisation.docker`). Podman re-evaluation is a later phase task, not now. |
-| ReCasaOS pinning | Pin all components to the revisions in upstream `release/components.lock.json` (upstream's own validated, API-compatible set), **not** to floating `main`. The root repo (`recasaos` input) is the pin of record; the other five are plain non-flake inputs re-pinned from its lock file by `nix/pins/update.sh` (`nix flake lock --override-input`). Check T7 fails when they disagree. |
+| ReCasaOS pinning | Pin of record: upstream root `release/components.lock.json` (upstream's validated set). Component **with open upstream PRs** (ours): flake input = our fork's `recasanix-preview` branch = lock rev + PR branches merged in order (`nix/pins/preview.json`) → post-merge preview via the normal source mechanism. Others: upstream at the lock rev. `nix/pins/update.sh` = only way to move pins (rebuilds previews, pushes, locks). T7: lock rev == preview base (or input), input == preview head. Merged PR → drop from `preview.json`. (Owner decision 2026-10-07; replaces "plain upstream inputs + PR content as patches".) |
 | Web UI source | `EdmundFu-233/ReCasaOS-UI` (maintained fork of the unmaintained `IceWhaleTech/CasaOS-UI`; see §6 for the licensing caveat). |
 | CI | Local `nix flake check` for now. CI pipeline + binary cache is a later phase. |
 | Cold vs hot state | **Nix owns the cold layer**: packages, service enablement, base network and storage *layout*, container-runtime setup, drivers, firewall, boot — infrequent, fleet-wide, atomic. **Hot state is imperative and is not routed through Nix**: users (ordinary useradd/PAM-style, `users.mutableUsers = true`), Samba/NFS shares, btrfs/ZFS pool and dataset topology (runtime `mkfs.btrfs`/`btrfs`/`zpool`/`zfs`; no NAS OS declares pools as system config), installed apps/containers, client network config. The CasaOS services already work the TrueNAS-middlewared way — structured records in their own databases, a generator step templates config files (e.g. `smb.casa.conf`, validated with `testparm`) and reloads the service — so we adopt that pattern instead of fighting it. |
@@ -135,12 +135,14 @@ Build quirks:
   files in a git tree.
 - Format with `nix fmt` (nixfmt-rfc-style) before finishing a task.
 - Every derivation gets `meta.description`, `meta.license` and `meta.platforms`.
+- **Telegram style, no prose**: docs, issues, PR descriptions (also upstream), commit bodies, code comments.
+  Bullets, tables, fragments. Brief and clear.
 - **Patches vs upstream PRs.** A change to an upstream component that is useful to upstream (bug
   and security fixes, integration breaks, features) goes to upstream as a PR — bounded, one concern
-  per PR, interdependent PRs stacked with their order stated — and is carried here as a
-  `nix/pkgs/<component>/patches/` file only until upstream merges it. Only changes that make sense
-  solely for an image-based, Nix-managed host (host-management stripping, NixOS paths) stay
-  local patches. Working clones of the forks live in `~/devel/github.com/ppenguin/ReCasaOS-EF/`
+  per PR, interdependent PRs stacked with their order stated — and is consumed through the
+  preview branch (`nix/pins/preview.json`) until upstream merges it. Only changes that make sense
+  solely for an image-based, Nix-managed host (host-management stripping) stay local patches in
+  `nix/pkgs/<component>/patches/`. Working clones of the forks live in `~/devel/github.com/ppenguin/ReCasaOS-EF/`
   (`<repo>-EF`, PR source) and `~/devel/github.com/ppenguin/ReCasaOS/` (`<repo>-RCOS`, reference).
 - Pins go in `flake.lock` via flake inputs; never fetch from the network inside a derivation except
   through a fixed-output fetcher with a recorded hash.

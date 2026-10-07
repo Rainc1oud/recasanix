@@ -10,14 +10,13 @@
     git-hooks.url = "github:cachix/git-hooks.nix";
     git-hooks.inputs.nixpkgs.follows = "nixpkgs";
 
-    # ReCasaOS components, as plain (non-flake) inputs. The URLs below are deliberately unpinned: the
-    # revisions live in flake.lock, and only nix/pins/update.sh moves them — it pins `recasaos` and
-    # then sets every other component to the revision named in that revision's
-    # release/components.lock.json (upstream's validated, API-compatible set), using
-    # `nix flake lock --override-input`. Never run a bare `nix flake update` or update one component
-    # on its own: that floats it to the branch head; check `pin-drift` (T7) fails if you do.
+    # ReCasaOS components, plain (non-flake) inputs. Unpinned URLs; revs live in flake.lock and only
+    # nix/pins/update.sh moves them (never a bare `nix flake update`: T7 fails).
+    # - component with open upstream PRs: our fork's `recasanix-preview` = upstream pin + PRs merged
+    #   (nix/pins/preview.json) → post-merge preview through the normal source mechanism
+    # - other components: upstream, at the rev of the root's release/components.lock.json
     recasaos = {
-      url = "github:EdmundFu-233/ReCasaOS";
+      url = "github:ppenguin/ReCasaOS-EF/recasanix-preview";
       flake = false;
     };
     recasaos-gateway = {
@@ -25,21 +24,20 @@
       flake = false;
     };
     recasaos-user-service = {
-      url = "github:EdmundFu-233/ReCasaOS-UserService";
+      url = "github:ppenguin/ReCasaOS-UserService-EF/recasanix-preview";
       flake = false;
     };
     recasaos-app-management = {
-      url = "github:EdmundFu-233/ReCasaOS-AppManagement";
+      url = "github:ppenguin/ReCasaOS-AppManagement-EF/recasanix-preview";
       flake = false;
     };
     recasaos-message-bus = {
-      url = "github:EdmundFu-233/ReCasaOS-MessageBus";
+      url = "github:ppenguin/ReCasaOS-MessageBus-EF/recasanix-preview";
       flake = false;
     };
-    # AGENTS.md §2: the UI comes from ReCasaOS-UI, the maintained fork of the unmaintained
-    # IceWhaleTech/CasaOS-UI. Keep in sync with `repo` in nix/lib/components.nix.
+    # UI: ReCasaOS-UI, maintained fork of IceWhaleTech/CasaOS-UI (AGENTS.md §2)
     casaos-ui = {
-      url = "github:EdmundFu-233/ReCasaOS-UI";
+      url = "github:ppenguin/ReCasaOS-UI-EF/recasanix-preview";
       flake = false;
     };
   };

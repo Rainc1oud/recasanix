@@ -523,7 +523,7 @@ UI's unfree allowance in `pkgs` (the flake's `recasanix-vm` and the tests provid
      the root service only accepts `Bearer <token>`; user-service takes both; app-management and message-bus
      took only the bare form. The result was a first login followed by an immediate logout (the 401s came from
      app-management/message-bus, and curl inside the machine never sees them: those services skip auth for
-     loopback clients, a browser arrives through the gateway). Fixed by UI patch 0003 (send `Bearer`) plus
+     loopback clients, a browser arrives through the gateway). Fixed by PR ReCasaOS-UI#11 (send `Bearer`) plus
      patches making app-management and message-bus strip an optional `Bearer ` prefix. Still open upstream:
      the wallpaper upload puts the token in a `?token=` query, which the fork rejects.
   3. user-service subscribed forever to the `local-storage` message-bus source of a service ReCasaOS does
@@ -1041,14 +1041,13 @@ loopback, or a connection that really arrived on the bus's root-only unix socket
 - loopback without / with a wrong credential, `Host: unix` (direct, through the gateway, and from the LAN
   address — pinned upstream answered **200 with every event type** there), and the socket as `nobody` are refused;
 - a browser's WebSocket subscription needs a one-use ticket (`POST /v2/message_bus/ticket` sets an HttpOnly,
-  SameSite=Strict cookie the handshake redeems): none → 401, ticket → 101, replay → 401 (message-bus patches
-  0007–0008; the dashboard side, UI patch 0009, is asserted by T10, which requires frames on the socket.io
+  SameSite=Strict cookie the handshake redeems): none → 401, ticket → 101, replay → 401 (PRs
+  ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7; dashboard side ReCasaOS-UI#10, asserted by T10, which requires frames on the socket.io
   subscription);
 - `PUT /v1/sys/state/off` ends in a `systemctl poweroff` requested by `casaos.service`, and the VM powers off.
 
-The code is a stacked series of upstream PRs to EdmundFu-233's repositories, carried as patches until merged
-(AGENTS.md §5): message-bus 0004–0006, app-management 0002–0004, user-service 0002–0003, root 0004–0006,
-UI 0005. Branches in `~/devel/github.com/ppenguin/ReCasaOS-EF/*-EF`; order in [COMPARISON-FORKS.md](./COMPARISON-FORKS.md).
+Code: upstream PRs to EdmundFu-233 (list + order: [COMPARISON-FORKS.md](./COMPARISON-FORKS.md)), built from
+our forks' preview branches until merged (AGENTS.md §2, "ReCasaOS pinning").
 
 ### T13 — Network shares
 
@@ -1061,8 +1060,8 @@ shell and never touch system accounts (root cannot be enrolled); a share restric
 that account in and gives it the files, refuses other accounts, guests and wrong passwords; an account in
 use cannot be deleted; deleting the fragment and restarting the root service restores it; accounts and
 passwords survive a reboot; re-assigning or removing the share hands the directory over / back to root.
-Upstream PRs carried as recasaos patches 0007–0008. Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
-T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard (UI patches 0007–0008). It needs
+Upstream: ReCasaOS#153, #154 (merged). Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
+T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard (PRs ReCasaOS-UI#8, ReCasaOS-UI#9). It needs
 a data pool: without Docker, app management answers the app grid with 500 and the upstream dashboard drops
 the whole grid, the built-in Files app included (an upstream UI robustness bug, not fixed here).
 
