@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: ppenguin <hieronymusv@gmail.com>
 Date: Wed, 7 Oct 2026 17:05:31 +0200
-Subject: [PATCH 6/6] chore(ui): drop the IceWhale community links and the blog
+Subject: [PATCH 6/8] chore(ui): drop the IceWhale community links and the blog
  news feed
 
 The dashboard still pointed users at IceWhale's channels for a project

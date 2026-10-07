@@ -39,6 +39,8 @@ mkCasaosGo {
     ./patches/0004-feat-gatewayclient-service-credential-helpers-for-in.patch
     ./patches/0005-feat-service-present-the-service-credential-to-the-m.patch
     ./patches/0006-fix-system-power-actions-through-systemd-and-report-.patch
+    ./patches/0007-feat-shares-external-Samba-main-config-include-only-.patch
+    ./patches/0008-feat-samba-share-accounts-and-per-share-restriction.patch
   ];
 
   # Shell helpers carry no store paths at all. Commands stay bare (the service unit's PATH resolves

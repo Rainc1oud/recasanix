@@ -27,6 +27,13 @@ let
     "subgid"
   ];
 
+  # Samba's passdb and secrets (share-account passwords): hot state.
+  sambaBind."/var/lib/samba" = {
+    device = "${mp}/samba";
+    fsType = "none";
+    options = [ "bind" ];
+  };
+
   stateFileSystem.${mp} = {
     inherit (cfg) device autoFormat;
     fsType = "ext4";
@@ -91,6 +98,11 @@ in
         virtualisation.fileSystems = lib.mkIf (cfg.device != null) stateFileSystem;
       })
 
+      (lib.mkIf config.services.samba.enable { fileSystems = sambaBind; })
+      (lib.optionalAttrs (options ? virtualisation.fileSystems) {
+        virtualisation.fileSystems = lib.mkIf config.services.samba.enable sambaBind;
+      })
+
       {
         # ReCasaOS: databases, user data and configuration move onto the state filesystem (the module
         # bind-mounts them at /var/lib/casaos and /etc/casaos, so nothing in the services needs to change).
@@ -123,7 +135,7 @@ in
           deps = [ "specialfs" ];
           text = ''
             # (the bind-mount sources of the ReCasaOS directories must exist before local-fs mounts them)
-            mkdir -p ${mp}/accounts ${mp}/nixos ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
+            mkdir -p ${mp}/accounts ${mp}/nixos ${mp}/samba ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
             if [ ! -L /var/lib/nixos ]; then
               if [ -d /var/lib/nixos ] && [ -z "$(ls -A ${mp}/nixos)" ]; then
                 cp -a /var/lib/nixos/. ${mp}/nixos/

@@ -157,8 +157,8 @@ rec {
         path = "helper.sh: RestartSMBD (systemctl restart smbd)";
         kind = "finding";
         why = "Restarts smbd (Debian unit name; NixOS calls it samba-smbd.service) after the shares service — hot state — has generated /etc/samba/smb.casa.conf and validated it with testparm. That generate-validate-reload pattern is the intended architecture, so this stays.";
-        replacedBy = "TODO(3.1/3.2): decide SMB scope; either alias the unit or patch the name, and give the baseline smb.conf (store) an `include` of the runtime smb.casa.conf on the state partition.";
-        caller = "TODO — kept deliberately; the SMB path is unexercised by tests (Phase 6)";
+        replacedBy = "Kept. `smbd.service` is an alias of samba-smbd.service; the store smb.conf includes /etc/samba/smb.casa.conf, which the root service publishes in include-only mode (`SambaMainConfig = external`, patches/0007, upstream PR) and regenerates from its share database at every start, so the fragment needs no persistence. Share accounts: patches/0008 (upstream PR); passdb on the state partition.";
+        caller = "yes — exercised end to end by check smb-shares (T13)";
       }
       {
         path = "service/system.go: SystemReboot / SystemShutdown (`init 6` / `init 0`)";

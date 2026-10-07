@@ -29,6 +29,8 @@ stdenv.mkDerivation (finalAttrs: {
     ./patches/0004-storage-panel-finally-typo.patch
     ./patches/0005-feat-events-present-the-service-credential-when-regi.patch
     ./patches/0006-chore-ui-drop-the-IceWhale-community-links-and-the-b.patch
+    ./patches/0007-fix-shares-never-ask-for-an-anonymous-share.patch
+    ./patches/0008-feat-shares-share-accounts-and-who-may-open-a-share.patch
   ];
 
   nativeBuildInputs = [

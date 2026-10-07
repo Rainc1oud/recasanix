@@ -847,6 +847,8 @@ GitLab CI later). All of these must run without hardware.
 | T10 | [x] | `checks.<sys>.ui-login` | Headless Chromium logs into the real UI and must stay logged in (no 401s) |
 | T11 | [x] | `checks.<sys>.storage-manager` | Real VM + gateway + UI in a browser: lists disks/volumes, creates storage on a blank disk (UI, then API for JBOD-extend), refuses changes to an existing one, needs a real access token |
 | T12 | [x] | `checks.<sys>.service-auth` | NixOS VM test: service-to-service trust boundary (loopback is not an identity) + UI power-off reaches systemd |
+| T13 | [x] | `checks.<sys>.smb-shares` | NixOS VM test: Samba with Nix-owned smb.conf, share accounts via the API, real smbclient: owner in, others/guests/wrong password out; fragment regenerated; survives a reboot |
+| T14 | [x] | `checks.<sys>.smb-ui` | Headless Chromium: Files → Shared → Share accounts → add; right-click a folder → Share → only that account; API, ownership and smbclient agree |
 
 ### T1 — Component unit tests
 
@@ -1042,6 +1044,22 @@ loopback, or a connection that really arrived on the bus's root-only unix socket
 The code is a stacked series of upstream PRs to EdmundFu-233's repositories, carried as patches until merged
 (AGENTS.md §5): message-bus 0004–0006, app-management 0002–0004, user-service 0002–0003, root 0004–0006,
 UI 0005. Branches in `~/devel/github.com/ppenguin/ReCasaOS-EF/*-EF`; order in [COMPARISON-FORKS.md](./COMPARISON-FORKS.md).
+
+### T13 — Network shares
+
+`nix/tests/smb-shares.nix`, decisions in AGENTS.md §2 ("SMB"). Samba runs with a Nix-owned `smb.conf`
+(SMB2+, mandatory signing, `map to guest = never`, `include = /etc/samba/smb.casa.conf`); the root service
+runs in include-only mode and publishes only that fragment, regenerated from its share database at every
+start (so the fragment is derived state; the database and Samba's passdb are on the state partition).
+Asserts, with a real `smbd` and `smbclient`: share accounts are created through the API with a nologin
+shell and never touch system accounts (root cannot be enrolled); a share restricted to an account lets
+that account in and gives it the files, refuses other accounts, guests and wrong passwords; an account in
+use cannot be deleted; deleting the fragment and restarting the root service restores it; accounts and
+passwords survive a reboot; re-assigning or removing the share hands the directory over / back to root.
+Upstream PRs carried as recasaos patches 0007–0008. Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
+T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard (UI patches 0007–0008). It needs
+a data pool: without Docker, app management answers the app grid with 500 and the upstream dashboard drops
+the whole grid, the built-in Files app included (an upstream UI robustness bug, not fixed here).
 
 ### Running tests
 

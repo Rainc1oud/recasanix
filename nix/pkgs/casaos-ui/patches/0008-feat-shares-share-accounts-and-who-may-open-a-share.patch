@@ -1,0 +1,544 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 17:30:48 +0200
+Subject: [PATCH 8/8] feat(shares): share accounts and who may open a share
+
+The root service now has share accounts (separate from the CasaOS login,
+no shell, only for network shares) and can restrict a share to one of
+them (ReCasaOS: "share accounts and per-share restriction"). This is the
+dashboard side:
+
+- "Share accounts" in Shared Folders: list, add, change password, delete
+  (the API refuses deleting an account a share still uses)
+- sharing a folder from the file browser asks who may open it: every
+  share account, or only one; a shared folder gets "Access" to change it
+
+SambaUsersModal is ported from the ReCasaOS distribution
+(ReCasaOS/CasaOS-UI); ShareAccessModal is adapted from it, since every
+share is authenticated here (no guest choice, no Time Machine yet).
+Stacked on "never ask for an anonymous share".
+
+Co-Authored-By: Gary <contact@ixelia.fr>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../filebrowser/components/ContextMenu.vue    |  43 ++--
+ .../filebrowser/shared/SambaUsersModal.vue    | 191 ++++++++++++++++++
+ .../filebrowser/shared/ShareAccessModal.vue   | 167 +++++++++++++++
+ .../filebrowser/shared/ShareListPage.vue      |  14 ++
+ src/service/samba.js                          |  22 ++
+ 5 files changed, 422 insertions(+), 15 deletions(-)
+ create mode 100644 src/components/filebrowser/shared/SambaUsersModal.vue
+ create mode 100644 src/components/filebrowser/shared/ShareAccessModal.vue
+
+diff --git a/src/components/filebrowser/components/ContextMenu.vue b/src/components/filebrowser/components/ContextMenu.vue
+index 1cf793b..d41a6ef 100644
+--- a/src/components/filebrowser/components/ContextMenu.vue
++++ b/src/components/filebrowser/components/ContextMenu.vue
+@@ -81,7 +81,10 @@
+ 						<b-dropdown-item v-if="!isShared" aria-role="menuitem" @click="shareFoler">
+ 							{{ $t('Share') }}
+ 						</b-dropdown-item>
+-						<b-dropdown-item v-else aria-role="menuitem" class="has-text-danger" @click="unShare">
++						<b-dropdown-item v-if="isShared" aria-role="menuitem" @click="shareAccess">
++							{{ $t('Access') }}
++						</b-dropdown-item>
++						<b-dropdown-item v-if="isShared" aria-role="menuitem" class="has-text-danger" @click="unShare">
+ 							{{ $t('UnShare') }}
+ 						</b-dropdown-item>
+ 					</template>
+@@ -108,6 +111,7 @@
+ <script>
+ import { mixin, wallpaperType } from '@/mixins/mixin';
+ import has from 'lodash/has'
++import ShareAccessModal from '@/components/filebrowser/shared/ShareAccessModal.vue'
+ 
+ export default {
+ 	mixins: [mixin],
+@@ -226,23 +230,32 @@ export default {
+ 			const downItem = (this.items.length == 1) ? this.items[0] : this.items
+ 			this.downloadFile(downItem);
+ 		},
+-		async shareFoler() {
++		// Sharing asks who may open the folder: any share account, or one.
++		shareFoler() {
+ 			this.$refs.dropDown.toggle()
+-			const data = [{
+-				path: this.item.path,
+-				anonymous: false
+-			}]
+-			try {
+-				await this.$api.samba.createShare(data)
++			this.openShareAccess({ path: this.item.path }, () => {
+ 				this.filePanel.reloadShare()
+ 				this.filePanel.getShareLink(this.item)
+-			} catch (error) {
+-				this.isSaving = false
+-				this.$buefy.toast.open({
+-					message: error.response.data.message,
+-					type: 'is-danger'
+-				})
+-			}
++			})
++		},
++
++		shareAccess() {
++			this.$refs.dropDown.toggle()
++			this.openShareAccess({ id: this.item.extensions.share.id, path: this.item.path }, () => this.filePanel.reloadShare())
++		},
++
++		openShareAccess(share, onReload) {
++			this.$buefy.modal.open({
++				parent: this.filePanel,
++				component: ShareAccessModal,
++				hasModalCard: true,
++				trapFocus: true,
++				canCancel: ['escape'],
++				scroll: 'keep',
++				animation: 'zoom-in',
++				props: { share },
++				events: { reload: onReload },
++			})
+ 		},
+ 
+ 		unShare() {
+diff --git a/src/components/filebrowser/shared/SambaUsersModal.vue b/src/components/filebrowser/shared/SambaUsersModal.vue
+new file mode 100644
+index 0000000..2088521
+--- /dev/null
++++ b/src/components/filebrowser/shared/SambaUsersModal.vue
+@@ -0,0 +1,191 @@
++<template>
++	<div class="modal-card samba-users-modal">
++		<header class="modal-card-head">
++			<h3 class="title is-header">
++				{{ $t('Share accounts') }}
++			</h3>
++		</header>
++
++		<section class="modal-card-body">
++			<p class="has-text-full-03 is-size-7 mb-4">
++				{{ $t('These accounts exist only for network shares. They are separate from your CasaOS login and cannot be used to sign in.') }}
++			</p>
++
++			<b-message v-if="error" class="mb-4" size="is-small" type="is-danger">
++				{{ error }}
++			</b-message>
++
++			<b-loading v-model="isLoading" :is-full-page="false" />
++
++			<div v-if="!isLoading && users.length === 0" class="has-text-full-03 is-size-7 mb-4">
++				{{ $t('No share account yet.') }}
++			</div>
++
++			<div v-for="user in users" :key="user" class="samba-users-modal__row is-flex is-align-items-center">
++				<div class="is-flex-grow-1">
++					{{ user }}
++				</div>
++				<b-button class="mr-2" rounded size="is-small" @click="changePassword(user)">
++					{{ $t('Change password') }}
++				</b-button>
++				<b-button rounded size="is-small" type="is-danger" @click="remove(user)">
++					{{ $t('Delete') }}
++				</b-button>
++			</div>
++
++			<hr>
++
++			<p class="is-size-7 mb-2">
++				{{ $t('Add an account') }}
++			</p>
++
++			<b-field :message="usernameError" :type="{ 'is-danger': usernameError }">
++				<b-input v-model="newUsername" :placeholder="$t('Account name')" />
++			</b-field>
++
++			<b-field>
++				<b-input v-model="newPassword" :placeholder="$t('Password')" password-reveal type="password" />
++			</b-field>
++
++			<b-button :disabled="!canCreate" :loading="isSaving" rounded type="is-primary" @click="create">
++				{{ $t('Add') }}
++			</b-button>
++		</section>
++
++		<footer class="modal-card-foot is-flex is-align-items-center">
++			<div class="is-flex-grow-1"></div>
++			<b-button :label="$t('Close')" rounded @click="$emit('close')" />
++		</footer>
++	</div>
++</template>
++
++<script>
++// Ported from the ReCasaOS distribution (ReCasaOS/CasaOS-UI). Mirrors the pattern
++// the backend validates against, so a bad name is refused
++// here with an explanation rather than by the API with a generic error.
++const USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,30}$/
++
++export default {
++	name: 'SambaUsersModal',
++	data() {
++		return {
++			users: [],
++			isLoading: true,
++			isSaving: false,
++			newUsername: '',
++			newPassword: '',
++			error: '',
++		}
++	},
++	computed: {
++		usernameError() {
++			if (this.newUsername === '') {
++				return ''
++			}
++
++			if (!USERNAME_PATTERN.test(this.newUsername)) {
++				return this.$t('Use 1 to 31 characters: lowercase letters, digits, underscores and hyphens, starting with a letter or underscore.')
++			}
++
++			if (this.users.includes(this.newUsername)) {
++				return this.$t('An account with that name already exists.')
++			}
++
++			return ''
++		},
++		canCreate() {
++			return this.newUsername !== '' && this.newPassword !== '' && this.usernameError === '' && !this.isSaving
++		},
++	},
++	mounted() {
++		this.load()
++	},
++	methods: {
++		async load() {
++			this.isLoading = true
++			try {
++				const response = await this.$api.samba.getUsers()
++				this.users = response.data.data || []
++			} catch (e) {
++				this.error = this.messageOf(e)
++			} finally {
++				this.isLoading = false
++			}
++		},
++
++		messageOf(e) {
++			return (e && e.response && e.response.data && e.response.data.message) || this.$t('Something went wrong.')
++		},
++
++		async create() {
++			if (!this.canCreate) {
++				return
++			}
++
++			this.isSaving = true
++			this.error = ''
++
++			try {
++				await this.$api.samba.createUser({ username: this.newUsername, password: this.newPassword })
++				this.newUsername = ''
++				this.newPassword = ''
++				await this.load()
++			} catch (e) {
++				this.error = this.messageOf(e)
++			} finally {
++				this.isSaving = false
++			}
++		},
++
++		changePassword(username) {
++			this.$buefy.dialog.prompt({
++				message: this.$t('New password for {name}', { name: username }),
++				inputAttrs: { type: 'password', required: true },
++				confirmText: this.$t('Save'),
++				cancelText: this.$t('Cancel'),
++				trapFocus: true,
++				onConfirm: async (password) => {
++					try {
++						await this.$api.samba.setUserPassword(username, password)
++						this.$buefy.toast.open({ message: this.$t('Password changed.'), type: 'is-success' })
++					} catch (e) {
++						this.$buefy.toast.open({ message: this.messageOf(e), type: 'is-danger' })
++					}
++				},
++			})
++		},
++
++		remove(username) {
++			this.$buefy.dialog.confirm({
++				// The API refuses while a share still names the account, so this only
++				// warns about the account itself.
++				message: this.$t('Delete the account {name}? Anyone using it will lose access.', { name: username }),
++				confirmText: this.$t('Delete'),
++				cancelText: this.$t('Cancel'),
++				type: 'is-danger',
++				onConfirm: async () => {
++					try {
++						await this.$api.samba.deleteUser(username)
++						await this.load()
++					} catch (e) {
++						this.$buefy.toast.open({ message: this.messageOf(e), type: 'is-danger' })
++					}
++				},
++			})
++		},
++	},
++}
++</script>
++
++<style lang="scss" scoped>
++.samba-users-modal {
++  &__row {
++    padding: 0.375rem 0;
++  }
++
++  .modal-card-body {
++    position: relative;
++    min-height: 10rem;
++  }
++}
++</style>
+diff --git a/src/components/filebrowser/shared/ShareAccessModal.vue b/src/components/filebrowser/shared/ShareAccessModal.vue
+new file mode 100644
+index 0000000..42c4cc0
+--- /dev/null
++++ b/src/components/filebrowser/shared/ShareAccessModal.vue
+@@ -0,0 +1,167 @@
++<template>
++	<div class="modal-card share-access-modal">
++		<header class="modal-card-head">
++			<h3 class="title is-header">
++				{{ isNew ? $t('Share this folder') : $t('Who can open this folder') }}
++			</h3>
++		</header>
++
++		<section class="modal-card-body">
++			<p class="has-text-full-03 is-size-7 mb-4">
++				{{ share.path }}
++			</p>
++
++			<b-message v-if="error" class="mb-4" size="is-small" type="is-danger">
++				{{ error }}
++			</b-message>
++
++			<b-switch v-model="restrict">
++				{{ $t('Only one account') }}
++			</b-switch>
++
++			<p v-if="!restrict" class="has-text-full-03 is-size-7 mt-2">
++				{{ $t('Every share account can open this folder.') }}
++			</p>
++
++			<b-field v-else class="mt-3">
++				<b-select v-model="username" :placeholder="$t('Choose an account')" expanded>
++					<option v-for="user in users" :key="user" :value="user">
++						{{ user }}
++					</option>
++				</b-select>
++			</b-field>
++
++			<p class="has-text-full-03 is-size-7 mt-3">
++				<a href="#" @click.prevent="manageUsers">{{ $t('Manage share accounts') }}</a>
++			</p>
++
++			<p v-if="restrict" class="has-text-full-03 is-size-7 mt-4">
++				{{ $t('The folder is handed to the account; files already in it keep their current permissions.') }}
++			</p>
++		</section>
++
++		<footer class="modal-card-foot is-flex is-align-items-center">
++			<div class="is-flex-grow-1"></div>
++			<div>
++				<b-button :label="$t('Cancel')" rounded @click="$emit('close')" />
++				<b-button :disabled="!canSave" :label="isNew ? $t('Share') : $t('Save')" :loading="isSaving" rounded
++					type="is-primary" @click="save" />
++			</div>
++		</footer>
++	</div>
++</template>
++
++<script>
++// Adapted from the ReCasaOS distribution (ReCasaOS/CasaOS-UI). Every share is
++// authenticated here, so the choice is not guest-or-account but "any share
++// account" or "only this one".
++import SambaUsersModal from './SambaUsersModal.vue'
++
++export default {
++	name: 'ShareAccessModal',
++	props: {
++		// { path } to share a folder; { id, path } to change an existing share
++		share: {
++			type: Object,
++			required: true,
++		},
++	},
++	data() {
++		return {
++			restrict: false,
++			username: '',
++			current: '',
++			users: [],
++			isSaving: false,
++			error: '',
++		}
++	},
++	computed: {
++		isNew() {
++			return !this.share.id
++		},
++		canSave() {
++			if (this.isSaving || (this.restrict && !this.username)) {
++				return false
++			}
++			return this.isNew || (this.restrict ? this.username : '') !== this.current
++		},
++	},
++	created() {
++		this.loadUsers()
++		if (!this.isNew) {
++			this.loadCurrent()
++		}
++	},
++	methods: {
++		messageOf(e) {
++			return (e && e.response && e.response.data && e.response.data.message) || this.$t('Something went wrong.')
++		},
++
++		async loadUsers() {
++			try {
++				const response = await this.$api.samba.getUsers()
++				this.users = response.data.data || []
++			} catch (e) {
++				this.users = []
++			}
++		},
++
++		// a file item does not carry the share's account: read it back
++		async loadCurrent() {
++			try {
++				const response = await this.$api.samba.getShares()
++				const share = (response.data.data || []).find(item => String(item.id) === String(this.share.id))
++				this.current = (share && share.username) || ''
++				this.restrict = this.current !== ''
++				this.username = this.current
++			} catch (e) {
++				this.error = this.messageOf(e)
++			}
++		},
++
++		manageUsers() {
++			this.$buefy.modal.open({
++				parent: this,
++				component: SambaUsersModal,
++				hasModalCard: true,
++				trapFocus: true,
++				canCancel: ['escape'],
++				scroll: 'keep',
++				animation: 'zoom-in',
++				events: { close: () => this.loadUsers() },
++			})
++		},
++
++		async save() {
++			if (!this.canSave) {
++				return
++			}
++			this.isSaving = true
++			this.error = ''
++			const username = this.restrict ? this.username : ''
++			try {
++				if (this.isNew) {
++					await this.$api.samba.createShare([{ path: this.share.path, anonymous: false, username }])
++				} else {
++					await this.$api.samba.updateShare(this.share.id, { username })
++				}
++				this.$emit('reload')
++				this.$emit('close')
++			} catch (e) {
++				this.error = this.messageOf(e)
++			} finally {
++				this.isSaving = false
++			}
++		},
++	},
++}
++</script>
++
++<style lang="scss" scoped>
++.share-access-modal {
++	.modal-card-body {
++		min-height: 12rem;
++	}
++}
++</style>
+diff --git a/src/components/filebrowser/shared/ShareListPage.vue b/src/components/filebrowser/shared/ShareListPage.vue
+index b133946..e457302 100644
+--- a/src/components/filebrowser/shared/ShareListPage.vue
++++ b/src/components/filebrowser/shared/ShareListPage.vue
+@@ -11,6 +11,7 @@
+ 			>
+ 				<h3 class="title is-header mb-0">{{ $t("Shared Folders") }}</h3>
+ 			</div>
++			<b-button class="mr-3" rounded size="is-small" @click="manageUsers">{{ $t("Share accounts") }}</b-button>
+ 			<b-icon class="close-button" icon="close-outline" pack="casa" @click.native="$emit('close');" />
+ 		</header>
+ 		<!-- Header End -->
+@@ -43,6 +44,7 @@
+ <script>
+ import ShareListView from "./ShareListView.vue";
+ import events        from "@/events/events";
++import SambaUsersModal from "./SambaUsersModal.vue";
+ 
+ export default {
+ 	data() {
+@@ -89,6 +91,18 @@ export default {
+ 		selectShare() {
+ 			this.$EventBus.$emit(events.SELECT_SHARE);
+ 		},
++
++		manageUsers() {
++			this.$buefy.modal.open({
++				parent: this,
++				component: SambaUsersModal,
++				hasModalCard: true,
++				trapFocus: true,
++				canCancel: ['escape'],
++				scroll: 'keep',
++				animation: 'zoom-in',
++			});
++		},
+ 	},
+ };
+ </script>
+diff --git a/src/service/samba.js b/src/service/samba.js
+index a3df514..26c826f 100644
+--- a/src/service/samba.js
++++ b/src/service/samba.js
+@@ -43,5 +43,27 @@ const samba = {
+ 	deleteShare(id) {
+ 		return api.delete(`${PREFIX}/shares/${id}`);
+ 	},
++
++	// restrict a share to one share account ({ username }), or lift it with ""
++	updateShare(id, data) {
++		return api.put(`${PREFIX}/shares/${id}`, data);
++	},
++
++	// Share accounts: separate from the CasaOS login, only for network shares
++	getUsers() {
++		return api.get(`${PREFIX}/users`);
++	},
++
++	createUser(data) {
++		return api.post(`${PREFIX}/users`, data);
++	},
++
++	setUserPassword(username, password) {
++		return api.put(`${PREFIX}/users/${encodeURIComponent(username)}/password`, { password });
++	},
++
++	deleteUser(username) {
++		return api.delete(`${PREFIX}/users/${encodeURIComponent(username)}`);
++	},
+ }
+ export default samba;

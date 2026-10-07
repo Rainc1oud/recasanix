@@ -23,6 +23,8 @@
   storage = import ./storage.nix { inherit pkgs; };
   recasaos-boot = import ./recasaos-boot.nix { inherit pkgs modules; };
   service-auth = import ./service-auth.nix { inherit pkgs modules; };
+  smb-shares = import ./smb-shares.nix { inherit pkgs modules; };
+  smb-ui = import ./smb-ui.nix { inherit pkgs modules; };
   ui-login = import ./ui-login.nix { inherit pkgs modules; };
   state-persistence = import ./state-persistence.nix { inherit pkgs modules; };
   docker = import ./docker.nix { inherit pkgs modules; };

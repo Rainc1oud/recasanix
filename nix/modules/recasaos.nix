@@ -47,6 +47,14 @@ let
     exfatprogs
   ];
 
+  # Share accounts (getent, useradd/userdel), their Samba passwords (smbpasswd) and the fragment
+  # validation (testparm), resolved through the unit's PATH (AGENTS.md §5).
+  smbPath = [
+    pkgs.getent # account lookups (through NSS)
+    pkgs.shadow
+    config.services.samba.package
+  ];
+
   # The services address /etc/casaos and /var/lib/casaos, and their hardened storage code refuses to
   # traverse symlinks ("open database directory component: not a directory"), so when the real
   # location differs (the state filesystem, task 3.2) it is *bind-mounted* there, not linked.
@@ -68,7 +76,10 @@ let
 
   stateInit = pkgs.writeShellApplication {
     name = "recasanix-state-init";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.crudini
+    ];
     text = ''
       config=${cfg.configDir}
       data=${cfg.dataDir}
@@ -84,6 +95,12 @@ let
       seed ${sysroot}/etc/casaos/user-service.conf.sample "$config/user-service.conf"
       seed ${sysroot}/etc/casaos/app-management.conf.sample "$config/app-management.conf"
       seed ${sysroot}/etc/casaos/casaos.conf.sample "$config/casaos.conf"
+      # VENDOR-owned key in the hot file: Nix owns smb.conf, so the root service must only ever manage
+      # the shares fragment (include-only mode). Enforced on every boot, the rest of the file untouched.
+      crudini --set "$config/casaos.conf" server SambaMainConfig ${
+        if cfg.smb.enable then "external" else "managed"
+      }
+      chmod 0600 "$config/casaos.conf"
       seed /dev/null "$config/env" # app-management reads it at start; empty unless configured
 
       # VENDOR-owned, rebuilt on every boot: start.d is *executed* by the root service at startup, so
@@ -234,6 +251,18 @@ in
       '';
     };
 
+    smb.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Network shares (AGENTS.md §2, "SMB"). Samba with a Nix-owned `smb.conf` that includes the
+        runtime fragment `/etc/samba/smb.casa.conf`; the root service runs in include-only mode
+        (`[server] SambaMainConfig = external`) and manages only that fragment, regenerated from its
+        share database at every start. Shares are restricted to separate SMB accounts created from the
+        UI/API (no shell, no host login); their passdb lives in /var/lib/samba (hot state).
+      '';
+    };
+
     storage = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -327,7 +356,7 @@ in
               exe = cfg.package;
               args = "-c /etc/casaos/casaos.conf";
               after = rootMounts ++ [ "casaos-message-bus.service" ];
-              path = rootPath;
+              path = rootPath ++ lib.optionals cfg.smb.enable smbPath;
               environment.RECASAOS_MANAGEMENT_FILE_ROOTS = lib.concatStringsSep "," cfg.fileRoots;
             };
 
@@ -495,6 +524,46 @@ in
       # qemu-vm.nix replaces the whole `fileSystems` set with `virtualisation.fileSystems` (see storage.nix).
       (lib.optionalAttrs (options ? virtualisation.fileSystems) {
         virtualisation.fileSystems = binds;
+      })
+
+      (lib.mkIf cfg.smb.enable {
+        services = {
+          samba = {
+            enable = true;
+            # SMB2+ only: no NetBIOS name service. Discovery is WS-Discovery (Windows) and mDNS (below).
+            nmbd.enable = false;
+            settings.global = {
+              "server role" = "standalone server";
+              security = "user";
+              "passdb backend" = "tdbsam";
+              "min protocol" = "SMB2";
+              "server signing" = "mandatory";
+              # every share is authenticated: a refused login must prompt for credentials, not fall
+              # back to the guest account and fail with "access denied"
+              "map to guest" = "never";
+              "ea support" = "yes";
+              "follow symlinks" = "no";
+              "wide links" = "no";
+              # the runtime fragment the root service publishes (include-only mode); a missing file
+              # (before the first start) is skipped by smbd
+              include = "/etc/samba/smb.casa.conf";
+            };
+          };
+          samba-wsdd = {
+            enable = true;
+            openFirewall = true;
+          };
+          avahi = {
+            enable = true;
+            openFirewall = true;
+            publish = {
+              enable = true;
+              userServices = true; # smbd registers _smb._tcp through avahi
+            };
+          };
+        };
+        # the root service restarts Samba as `systemctl restart smbd` (helper.sh RestartSMBD)
+        systemd.services.samba-smbd.aliases = [ "smbd.service" ];
       })
     ]
   );

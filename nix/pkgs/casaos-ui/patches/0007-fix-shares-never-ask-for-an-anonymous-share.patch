@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 17:28:13 +0200
+Subject: [PATCH 7/8] fix(shares): never ask for an anonymous share
+
+All three ways of sharing a folder (the file browser's context menu,
+the "Shared Folders" guide and "share" in the new-folder dialog) posted
+anonymous: true. The root service refuses anonymous shares (mandatory
+SMB signing; guest access is off), so sharing a folder from the
+dashboard always failed with that error. They now ask for an
+authenticated share, the only kind there is.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/components/filebrowser/components/ContextMenu.vue  | 2 +-
+ src/components/filebrowser/modals/NewFolderModal.vue   | 2 +-
+ src/components/filebrowser/shared/SelectShareModal.vue | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/filebrowser/components/ContextMenu.vue b/src/components/filebrowser/components/ContextMenu.vue
+index 34d5bdc..1cf793b 100644
+--- a/src/components/filebrowser/components/ContextMenu.vue
++++ b/src/components/filebrowser/components/ContextMenu.vue
+@@ -230,7 +230,7 @@ export default {
+ 			this.$refs.dropDown.toggle()
+ 			const data = [{
+ 				path: this.item.path,
+-				anonymous: true
++				anonymous: false
+ 			}]
+ 			try {
+ 				await this.$api.samba.createShare(data)
+diff --git a/src/components/filebrowser/modals/NewFolderModal.vue b/src/components/filebrowser/modals/NewFolderModal.vue
+index 8459a80..4b22de7 100644
+--- a/src/components/filebrowser/modals/NewFolderModal.vue
++++ b/src/components/filebrowser/modals/NewFolderModal.vue
+@@ -117,7 +117,7 @@ export default {
+ 							// set shared data
+ 							const data = [{
+ 								path: newPath,
+-								anonymous: true
++								anonymous: false
+ 							}]
+ 							// save shared data
+ 							await this.$api.samba.createShare(data)
+diff --git a/src/components/filebrowser/shared/SelectShareModal.vue b/src/components/filebrowser/shared/SelectShareModal.vue
+index 00555f5..ea517b8 100644
+--- a/src/components/filebrowser/shared/SelectShareModal.vue
++++ b/src/components/filebrowser/shared/SelectShareModal.vue
+@@ -167,7 +167,7 @@ export default {
+ 			const data = selectedList.map(item => {
+ 				return {
+ 					path: item.path,
+-					anonymous: true
++					anonymous: false
+ 				}
+ 			})
+ 			try {

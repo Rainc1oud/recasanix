@@ -124,8 +124,12 @@ Branches local in `~/devel/github.com/ppenguin/ReCasaOS-EF/<repo>-EF` (forks `pp
 | — | ReCasaOS | `fix/systemd-power-actions` | `systemctl --no-block reboot\|poweroff`, failures → 500 (ported, credited alvins82) | — | 2 |
 | — | MessageBus | `fix/subscriptions-before-start` | startup races: subscription made before `Start` wiped (YSK cards stop updating), publish before `Start` → nil-ctx panic; ysk tests poll instead of sleeping (flaked under `nix flake check`) | — (put first: carried as 0002–0003) | — |
 | — | UI | `chore/remove-upstream-community-links` | drop IceWhale Discord/GitHub/feedback/share/wiki/awesome links; drop blog news feed (sent `baseinfo.conf` device ids to `blog-casaos.zimaspace.com`) | — | — |
+| S-A | ReCasaOS | `feat/samba-external-main-config` | `[server] SambaMainConfig = external`: main smb.conf owned by the host (never read/written; NixOS symlink broke every share op), only `smb.casa.conf` managed; reconcile checks the include | — | 3 |
+| S-B | ReCasaOS | `feat/samba-share-accounts` | share accounts (`/v1/samba/users`, nologin, GECOS marker, stdin passwords), per-share `valid users` + `force user`, directory handed to the account via pinned-root fchown (ported from ORG 5a7c55c/20df217) | S-A (stacked) | 3 |
+| S-C0 | UI | `fix/shares-never-anonymous` | all three share entry points posted `anonymous: true`, which the root service refuses → sharing from the dashboard always failed | — | 3 |
+| S-C | UI | `feat/share-accounts-ui` | Share accounts dialog (ported from ORG), "who may open this folder" on Share and a new "Access" item (adapted: no guest/Time Machine) | S-C0 (stacked); S-B deployed | 3 |
 
 - Design: reuses EF's existing per-start `gateway.token` (gateway management API already requires it) instead of ORG's new `internal.secret` → no new file/scheme upstream.
 - **#1 is a security fix with a confirmed exploit** on pinned upstream (LAN client + `Host: unix` through the gateway → 200, full bus API) → report privately (GitHub security advisory) before opening PR 1 publicly.
 - Not in series: websocket subscribe still unauthenticated (needs UI + query-token, conflicts EF policy → discuss upstream first); our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
-- Harvest #3 (Samba account shares): pending decision on SMB scope (task 3.1/3.2).
+- Harvest #3 (Samba account shares): S-A, S-B, S-C0, S-C done, verified by T13 (backend, smbclient) and T14 (browser). Open: EF's *managed* main template still has `map to guest = bad user` (a refused login is denied instead of prompted) → follow-up PR, needs a managed-template migration. EF UI drops the whole app grid (built-in Files included) when the app-grid request fails → follow-up PR.

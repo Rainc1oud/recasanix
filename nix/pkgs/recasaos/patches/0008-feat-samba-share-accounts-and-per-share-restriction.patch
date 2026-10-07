@@ -1,0 +1,1243 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ppenguin <hieronymusv@gmail.com>
+Date: Wed, 7 Oct 2026 17:14:47 +0200
+Subject: [PATCH 8/8] feat(samba): share accounts and per-share restriction
+
+Every share here is authenticated (guest access is off), but nothing
+could grant access: there was no way to create a Samba account, and a
+share was open to any account Samba happened to know.
+
+Share accounts are system accounts that exist only to mount shares:
+separate from the CasaOS login, no home directory, a nologin shell, and
+marked in GECOS so the API never re-keys or removes any other account
+of the machine (root included). Passwords go to smbpasswd's standard
+input, never into the process table. A share can be restricted to one
+account; it is rendered as `valid users` + `force user` together (one
+without the other leaves the share open to every account, or hands the
+files to whoever connected). A share without an account renders exactly
+as before, and existing rows read back with an empty account.
+
+The share's top directory goes to its account (account:account, 0770)
+when it is restricted, and back to root (0755) when the restriction is
+lifted or the share removed: with force user, a root-owned directory
+would authenticate and then refuse every write. It changes through the
+pinned management roots (fchown/fchmod on the opened directory), inside
+the same transaction, and is restored if publishing fails. Nothing
+below the top directory is touched.
+
+API: GET/POST /v1/samba/users, PUT /v1/samba/users/:username/password,
+DELETE /v1/samba/users/:username (refused while a share names the
+account), PUT /v1/samba/shares/:id {"username"}, and "username" on
+share creation. Changing a share's account publishes the fragment in
+the same transaction as the row, with the existing rollback.
+
+nologin is looked up in its usual locations (incl. NixOS's) before
+PATH, so the accounts' shell does not point into a package store.
+
+Ported from the ReCasaOS distribution (ReCasaOS/CasaOS 5a7c55c,
+20df217: "let a share be restricted to a dedicated account"), adapted to
+this fork's authenticated-only shares and transactional publication.
+Stacked on "external Samba main config (include-only mode)".
+
+Co-Authored-By: Gary <contact@ixelia.fr>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ model/share.go                 |  10 ++
+ route/v1.go                    |   9 +
+ route/v1/samba.go              |  42 ++++-
+ route/v1/samba_user.go         |  75 +++++++++
+ route/v1/samba_user_test.go    |  82 +++++++++
+ service/model/o_shares.go      |   8 +-
+ service/samba_user.go          | 293 +++++++++++++++++++++++++++++++++
+ service/samba_user_test.go     | 183 ++++++++++++++++++++
+ service/shares.go              | 131 ++++++++++++++-
+ service/shares_account_test.go | 167 +++++++++++++++++++
+ 10 files changed, 988 insertions(+), 12 deletions(-)
+ create mode 100644 route/v1/samba_user.go
+ create mode 100644 route/v1/samba_user_test.go
+ create mode 100644 service/samba_user.go
+ create mode 100644 service/samba_user_test.go
+ create mode 100644 service/shares_account_test.go
+
+diff --git a/model/share.go b/model/share.go
+index f164db1..a6eeeba 100644
+--- a/model/share.go
++++ b/model/share.go
+@@ -14,4 +14,14 @@ type Shares struct {
+ 	ID        uint   `json:"id"`
+ 	Anonymous bool   `json:"anonymous"`
+ 	Path      string `json:"path"`
++	// Username restricts the share to one share account (see SambaUser).
++	Username string `json:"username"`
++}
++
++// SambaUser is the payload for creating a share account or changing its
++// password. It is never returned to a client: the password only travels
++// inwards.
++type SambaUser struct {
++	Username string `json:"username"`
++	Password string `json:"password"`
+ }
+diff --git a/route/v1.go b/route/v1.go
+index 1718f83..6e96af2 100644
+--- a/route/v1.go
++++ b/route/v1.go
+@@ -147,9 +147,18 @@ func InitV1Router() http.Handler {
+ 			{
+ 				v1SharesGroup.GET("", v1.GetSambaSharesList)
+ 				v1SharesGroup.POST("", v1.PostSambaSharesCreate)
++				v1SharesGroup.PUT("/:id", v1.PutSambaShare)
+ 				v1SharesGroup.DELETE("/:id", v1.DeleteSambaShares)
+ 				v1SharesGroup.GET("/status", v1.GetSambaStatus)
+ 			}
++			v1SambaUsersGroup := v1SambaGroup.Group("/users")
++			v1SambaUsersGroup.Use()
++			{
++				v1SambaUsersGroup.GET("", v1.GetSambaUsersList)
++				v1SambaUsersGroup.POST("", v1.PostSambaUserCreate)
++				v1SambaUsersGroup.PUT("/:username/password", v1.PutSambaUserPassword)
++				v1SambaUsersGroup.DELETE("/:username", v1.DeleteSambaUser)
++			}
+ 		}
+ 		v1NotifyGroup := v1Group.Group("/notify")
+ 		v1NotifyGroup.Use()
+diff --git a/route/v1/samba.go b/route/v1/samba.go
+index 4affe2f..6d409df 100644
+--- a/route/v1/samba.go
++++ b/route/v1/samba.go
+@@ -63,6 +63,7 @@ func GetSambaSharesList(ctx echo.Context) error {
+ 			Anonymous: v.Anonymous,
+ 			Path:      v.Path,
+ 			ID:        v.ID,
++			Username:  v.Username,
+ 		})
+ 	}
+ 	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: shareList})
+@@ -86,6 +87,11 @@ func PostSambaSharesCreate(ctx echo.Context) error {
+ 		if share.Path == "" {
+ 			return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INSUFFICIENT_PERMISSIONS, Message: common_err.GetMsg(common_err.INSUFFICIENT_PERMISSIONS)})
+ 		}
++		if share.Username != "" {
++			if message := checkShareAccount(share.Username); message != "" {
++				return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INVALID_PARAMS, Message: message})
++			}
++		}
+ 	}
+ 	managementRoots, err := filesecurity.ManagementFileRoots()
+ 	if err != nil {
+@@ -115,7 +121,7 @@ func PostSambaSharesCreate(ctx echo.Context) error {
+ 		}
+ 		seenPaths[canonicalPath] = struct{}{}
+ 		seenNames[caseFoldedName] = struct{}{}
+-		canonicalShares = append(canonicalShares, model.Shares{Anonymous: v.Anonymous, Path: canonicalPath})
++		canonicalShares = append(canonicalShares, model.Shares{Anonymous: v.Anonymous, Path: canonicalPath, Username: v.Username})
+ 		shareNames = append(shareNames, shareName)
+ 	}
+ 	shareDBModels := make([]model2.SharesDBModel, 0, len(canonicalShares))
+@@ -124,6 +130,7 @@ func PostSambaSharesCreate(ctx echo.Context) error {
+ 			Anonymous: v.Anonymous,
+ 			Path:      v.Path,
+ 			Name:      shareNames[index],
++			Username:  v.Username,
+ 		})
+ 	}
+ 	if err := service.MyService.Shares().CreateShares(shareDBModels); err != nil {
+@@ -144,6 +151,39 @@ func DeleteSambaShares(ctx echo.Context) error {
+ 	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: id})
+ }
+ 
++// PutSambaShare restricts a share to one share account ({"username": "..."}),
++// or lifts the restriction with an empty username.
++func PutSambaShare(ctx echo.Context) error {
++	id := ctx.Param("id")
++	request := model.Shares{}
++	if id == "" || ctx.Bind(&request) != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INVALID_PARAMS, Message: common_err.GetMsg(common_err.INVALID_PARAMS)})
++	}
++	if request.Username != "" {
++		if message := checkShareAccount(request.Username); message != "" {
++			return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INVALID_PARAMS, Message: message})
++		}
++	}
++	if err := service.MyService.Shares().SetShareUsername(id, request.Username); err != nil {
++		return ctx.JSON(common_err.SERVICE_ERROR, model.Result{Success: common_err.SERVICE_ERROR, Message: common_err.GetMsg(common_err.SERVICE_ERROR), Data: err.Error()})
++	}
++	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: id})
++}
++
++// checkShareAccount returns why username cannot restrict a share, or "".
++// Only share accounts qualify: naming root or any other system account would
++// render it into "force user".
++var checkShareAccount = func(username string) string {
++	managed, err := service.IsSambaShareAccount(username)
++	if err != nil {
++		return err.Error()
++	}
++	if !managed {
++		return service.ErrSambaUserNotManaged.Error()
++	}
++	return ""
++}
++
+ // client
+ func GetSambaConnectionsList(ctx echo.Context) error {
+ 	connections, err := service.MyService.Connections().GetConnectionsList()
+diff --git a/route/v1/samba_user.go b/route/v1/samba_user.go
+new file mode 100644
+index 0000000..7be293c
+--- /dev/null
++++ b/route/v1/samba_user.go
+@@ -0,0 +1,75 @@
++package v1
++
++import (
++	"net/http"
++
++	"github.com/IceWhaleTech/CasaOS/model"
++	"github.com/IceWhaleTech/CasaOS/pkg/utils/common_err"
++	"github.com/IceWhaleTech/CasaOS/service"
++	"github.com/labstack/echo/v4"
++)
++
++const maxSambaUserBodyBytes = 4 << 10
++
++// Indirection for tests; the real ones run useradd, smbpasswd and userdel.
++var (
++	listSambaUsers   = service.ListSambaUsers
++	createSambaUser  = service.CreateSambaUser
++	setSambaPassword = service.SetSambaPassword
++	deleteSambaUser  = service.DeleteSambaUser
++)
++
++// GetSambaUsersList returns the share accounts. Accounts of the operating
++// system are neither listed nor manageable here.
++func GetSambaUsersList(ctx echo.Context) error {
++	users, err := listSambaUsers()
++	if err != nil {
++		return ctx.JSON(common_err.SERVICE_ERROR, model.Result{Success: common_err.SERVICE_ERROR, Message: common_err.GetMsg(common_err.SERVICE_ERROR)})
++	}
++	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: users})
++}
++
++// PostSambaUserCreate adds a share account: no home directory, no login
++// shell, so it cannot be used to reach the host.
++func PostSambaUserCreate(ctx echo.Context) error {
++	ctx.Request().Body = http.MaxBytesReader(ctx.Response().Writer, ctx.Request().Body, maxSambaUserBodyBytes)
++	request := model.SambaUser{}
++	if err := ctx.Bind(&request); err != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INVALID_PARAMS, Message: common_err.GetMsg(common_err.INVALID_PARAMS)})
++	}
++	if err := createSambaUser(request.Username, request.Password); err != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.CLIENT_ERROR, Message: err.Error()})
++	}
++	// only the name goes back
++	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: request.Username})
++}
++
++// PutSambaUserPassword replaces the password of a share account.
++func PutSambaUserPassword(ctx echo.Context) error {
++	username := ctx.Param("username")
++	ctx.Request().Body = http.MaxBytesReader(ctx.Response().Writer, ctx.Request().Body, maxSambaUserBodyBytes)
++	request := model.SambaUser{}
++	if err := ctx.Bind(&request); err != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.INVALID_PARAMS, Message: common_err.GetMsg(common_err.INVALID_PARAMS)})
++	}
++	if err := setSambaPassword(username, request.Password); err != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.CLIENT_ERROR, Message: err.Error()})
++	}
++	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: username})
++}
++
++// DeleteSambaUser removes a share account, refusing while a share still names
++// it: smbd treats a "valid users" entry that no longer resolves as nobody
++// being allowed in, and the share would stop working without explanation.
++func DeleteSambaUser(ctx echo.Context) error {
++	username := ctx.Param("username")
++	for _, share := range service.MyService.Shares().GetSharesList() {
++		if share.Username == username {
++			return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.CLIENT_ERROR, Message: "this account is still used by the share " + share.Name})
++		}
++	}
++	if err := deleteSambaUser(username); err != nil {
++		return ctx.JSON(common_err.CLIENT_ERROR, model.Result{Success: common_err.CLIENT_ERROR, Message: err.Error()})
++	}
++	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: username})
++}
+diff --git a/route/v1/samba_user_test.go b/route/v1/samba_user_test.go
+new file mode 100644
+index 0000000..e86dcd6
+--- /dev/null
++++ b/route/v1/samba_user_test.go
+@@ -0,0 +1,82 @@
++package v1
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"github.com/IceWhaleTech/CasaOS-Common/utils/logger"
++	"github.com/IceWhaleTech/CasaOS/service"
++	model2 "github.com/IceWhaleTech/CasaOS/service/model"
++	"github.com/labstack/echo/v4"
++)
++
++type sambaUserRouteShares struct {
++	service.SharesService
++	shares []model2.SharesDBModel
++}
++
++func (s sambaUserRouteShares) GetSharesList() []model2.SharesDBModel { return s.shares }
++
++type sambaUserRouteRepository struct {
++	service.Repository
++	shares service.SharesService
++}
++
++func (r sambaUserRouteRepository) Shares() service.SharesService { return r.shares }
++
++func TestDeleteSambaUserRefusesAnAccountInUse(t *testing.T) {
++	logger.LogInitConsoleOnly()
++	previous := service.MyService
++	t.Cleanup(func() { service.MyService = previous })
++	service.MyService = sambaUserRouteRepository{shares: sambaUserRouteShares{shares: []model2.SharesDBModel{{ID: 1, Name: "Media", Username: "alice"}}}}
++
++	deleted := []string{}
++	previousDelete := deleteSambaUser
++	deleteSambaUser = func(username string) error { deleted = append(deleted, username); return nil }
++	t.Cleanup(func() { deleteSambaUser = previousDelete })
++
++	call := func(username string) (int, string) {
++		e := echo.New()
++		recorder := httptest.NewRecorder()
++		ctx := e.NewContext(httptest.NewRequest(http.MethodDelete, "/v1/samba/users/"+username, nil), recorder)
++		ctx.SetParamNames("username")
++		ctx.SetParamValues(username)
++		if err := DeleteSambaUser(ctx); err != nil {
++			t.Fatal(err)
++		}
++		return recorder.Code, recorder.Body.String()
++	}
++
++	if code, body := call("alice"); code == http.StatusOK || !strings.Contains(body, "still used by the share Media") {
++		t.Fatalf("deleting an account in use: %d %s", code, body)
++	}
++	if len(deleted) != 0 {
++		t.Fatalf("account deleted although a share names it: %v", deleted)
++	}
++	if code, _ := call("bob"); code != http.StatusOK || len(deleted) != 1 || deleted[0] != "bob" {
++		t.Fatalf("deleting an unused account: %d %v", code, deleted)
++	}
++}
++
++func TestShareAccountMustBeAShareAccount(t *testing.T) {
++	previous := checkShareAccount
++	t.Cleanup(func() { checkShareAccount = previous })
++	checkShareAccount = func(username string) string {
++		if username == "alice" {
++			return ""
++		}
++		return service.ErrSambaUserNotManaged.Error()
++	}
++	e := echo.New()
++	request := httptest.NewRequest(http.MethodPost, "/v1/samba/shares", strings.NewReader(`[{"path":"/DATA/Media","username":"root"}]`))
++	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
++	recorder := httptest.NewRecorder()
++	if err := PostSambaSharesCreate(e.NewContext(request, recorder)); err != nil {
++		t.Fatal(err)
++	}
++	if recorder.Code == http.StatusOK || !strings.Contains(recorder.Body.String(), service.ErrSambaUserNotManaged.Error()) {
++		t.Fatalf("a share restricted to a system account was accepted: %d %s", recorder.Code, recorder.Body.String())
++	}
++}
+diff --git a/service/model/o_shares.go b/service/model/o_shares.go
+index a887522..0e8e137 100644
+--- a/service/model/o_shares.go
++++ b/service/model/o_shares.go
+@@ -15,8 +15,12 @@ type SharesDBModel struct {
+ 	Anonymous bool   `json:"anonymous"`
+ 	Path      string `json:"path"`
+ 	Name      string `json:"name"`
+-	Updated   int64  `gorm:"autoUpdateTime"`
+-	Created   int64  `gorm:"autoCreateTime"`
++	// Username is the share account allowed to mount the share. Empty: any
++	// account Samba knows, as for every row created before share accounts
++	// existed (AutoMigrate adds the column; old rows read back empty).
++	Username string `json:"username"`
++	Updated  int64  `gorm:"autoUpdateTime"`
++	Created  int64  `gorm:"autoCreateTime"`
+ }
+ 
+ func (p *SharesDBModel) TableName() string {
+diff --git a/service/samba_user.go b/service/samba_user.go
+new file mode 100644
+index 0000000..0a3f02b
+--- /dev/null
++++ b/service/samba_user.go
+@@ -0,0 +1,293 @@
++package service
++
++import (
++	"bufio"
++	"bytes"
++	"context"
++	"errors"
++	"fmt"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"regexp"
++	"strconv"
++	"strings"
++	"syscall"
++	"time"
++
++	"github.com/IceWhaleTech/CasaOS/pkg/filesecurity"
++)
++
++// Share accounts: system accounts that exist only to mount Samba shares. They
++// are separate from the CasaOS login, have no home directory and no login
++// shell, and are created, re-keyed and removed through the API.
++//
++// Ported from the ReCasaOS distribution (ReCasaOS/CasaOS, "let a share be
++// restricted to a dedicated account", by Gary), adapted to this fork: every
++// share here is already authenticated, so an account restricts a share
++// instead of converting it from guest access.
++
++const (
++	// sambaAccountComment is written to the GECOS field and is how these
++	// accounts are recognised later. It gates password changes and deletion:
++	// matching too broadly would let the API re-key or remove a real account
++	// of the machine, so the check fails towards leaving a stale account.
++	sambaAccountComment = "CasaOS share account"
++
++	sambaAccountToolTimeout = 30 * time.Second
++)
++
++var (
++	// sambaUsernamePattern is deliberately narrower than what useradd accepts:
++	// these names reach useradd, smbpasswd and smb.conf "valid users" and
++	// "force user" lines, so anything outside a conservative POSIX set is
++	// rejected rather than escaped.
++	sambaUsernamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,30}$`)
++
++	// sambaNologinCandidates are the usual places of nologin(8); the first that
++	// exists becomes the accounts' shell. A path that moves on every update
++	// (a package store) is no good as a login shell, hence a list of stable
++	// locations before a PATH lookup. /run/current-system/sw/bin is NixOS's.
++	sambaNologinCandidates = []string{"/usr/sbin/nologin", "/sbin/nologin", "/usr/bin/nologin", "/run/current-system/sw/bin/nologin"}
++
++	ErrSambaUsernameInvalid = errors.New("a share account name must be 1 to 31 characters, start with a lowercase letter or underscore, and contain only lowercase letters, digits, underscores and hyphens")
++	ErrSambaPasswordEmpty   = errors.New("a share account password cannot be empty")
++	ErrSambaPasswordInvalid = errors.New("a share account password cannot contain line breaks or NUL")
++	ErrSambaUserExists      = errors.New("a system account with that name already exists")
++	ErrSambaUserNotManaged  = errors.New("that account is not a CasaOS share account")
++	ErrSambaNologinMissing  = errors.New("no nologin shell found for share accounts")
++)
++
++// ValidateSambaUsername reports whether name is safe to pass to the account
++// tooling and into smb.conf. Callers must run it before anything else touches
++// the name.
++func ValidateSambaUsername(name string) error {
++	if !sambaUsernamePattern.MatchString(name) {
++		return ErrSambaUsernameInvalid
++	}
++	return nil
++}
++
++func validateSambaPassword(password string) error {
++	if password == "" {
++		return ErrSambaPasswordEmpty
++	}
++	// smbpasswd -s reads it line by line from standard input
++	if strings.ContainsAny(password, "\r\n\x00") {
++		return ErrSambaPasswordInvalid
++	}
++	return nil
++}
++
++func sambaNologinShell() (string, error) {
++	for _, candidate := range sambaNologinCandidates {
++		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
++			return candidate, nil
++		}
++	}
++	if path, err := exec.LookPath("nologin"); err == nil {
++		return path, nil
++	}
++	return "", ErrSambaNologinMissing
++}
++
++// runAccountTool runs one of the account tools, resolved through PATH, with a
++// deadline and bounded output. stdin, if any, never appears on a command line.
++func runAccountTool(stdin string, name string, args ...string) ([]byte, error) {
++	ctx, cancel := context.WithTimeout(context.Background(), sambaAccountToolTimeout)
++	defer cancel()
++	output := &boundedCommandOutput{limit: 8 << 10}
++	command := exec.CommandContext(ctx, name, args...)
++	if stdin != "" {
++		command.Stdin = strings.NewReader(stdin)
++	}
++	command.Stdout = output
++	command.Stderr = output
++	err := command.Run()
++	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
++		return output.buffer.Bytes(), fmt.Errorf("%s timed out", name)
++	}
++	return output.buffer.Bytes(), err
++}
++
++// sambaPasswdEntry looks an account up through NSS (getent), so the answer is
++// the one useradd, smbd and the kernel's view agree on.
++func sambaPasswdEntry(username string) ([]string, bool, error) {
++	output, err := runAccountTool("", "getent", "passwd", username)
++	if err != nil {
++		var exitErr *exec.ExitError
++		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 { // getent: key not found
++			return nil, false, nil
++		}
++		return nil, false, fmt.Errorf("look up account: %w", err)
++	}
++	fields := strings.Split(strings.TrimSpace(string(output)), ":")
++	if len(fields) < 7 || fields[0] != username {
++		return nil, false, errors.New("look up account: malformed passwd entry")
++	}
++	return fields, true, nil
++}
++
++func isSambaShareAccountEntry(fields []string) bool {
++	return len(fields) >= 7 && fields[4] == sambaAccountComment && filepath.Base(fields[6]) == "nologin"
++}
++
++// IsSambaShareAccount reports whether username is a share account created
++// here.
++func IsSambaShareAccount(username string) (bool, error) {
++	if err := ValidateSambaUsername(username); err != nil {
++		return false, err
++	}
++	fields, found, err := sambaPasswdEntry(username)
++	if err != nil || !found {
++		return false, err
++	}
++	return isSambaShareAccountEntry(fields), nil
++}
++
++// ListSambaUsers returns the share accounts created here, and no other account
++// of the machine.
++func ListSambaUsers() ([]string, error) {
++	output, err := runAccountTool("", "getent", "passwd")
++	if err != nil {
++		return nil, fmt.Errorf("list accounts: %w", err)
++	}
++	names := []string{}
++	scanner := bufio.NewScanner(bytes.NewReader(output))
++	for scanner.Scan() {
++		fields := strings.Split(strings.TrimSpace(scanner.Text()), ":")
++		if isSambaShareAccountEntry(fields) && sambaUsernamePattern.MatchString(fields[0]) {
++			names = append(names, fields[0])
++		}
++	}
++	return names, scanner.Err()
++}
++
++// CreateSambaUser adds a system account that can only be used for file
++// sharing, then registers it with Samba. It gets no home directory and no
++// login shell; the password goes to smbpasswd's standard input, never into
++// the process table.
++func CreateSambaUser(username, password string) error {
++	if err := ValidateSambaUsername(username); err != nil {
++		return err
++	}
++	if err := validateSambaPassword(password); err != nil {
++		return err
++	}
++	if _, found, err := sambaPasswdEntry(username); err != nil {
++		return err
++	} else if found {
++		return ErrSambaUserExists
++	}
++	shell, err := sambaNologinShell()
++	if err != nil {
++		return err
++	}
++	if output, err := runAccountTool("", "useradd", "--system", "--no-create-home", "--shell", shell, "--comment", sambaAccountComment, username); err != nil {
++		return fmt.Errorf("create the system account: %w: %s", err, strings.TrimSpace(string(output)))
++	}
++	if err := SetSambaPassword(username, password); err != nil {
++		// do not leave a system account behind that Samba never learned about
++		if output, delErr := runAccountTool("", "userdel", username); delErr != nil {
++			return errors.Join(err, fmt.Errorf("remove the half-created account: %w: %s", delErr, strings.TrimSpace(string(output))))
++		}
++		return err
++	}
++	return nil
++}
++
++// SetSambaPassword sets or replaces the Samba password of a share account.
++// It refuses any other account: without that, the endpoint would enrol root,
++// or any system account, into Samba with a password the caller chose.
++func SetSambaPassword(username, password string) error {
++	if err := validateSambaPassword(password); err != nil {
++		return err
++	}
++	managed, err := IsSambaShareAccount(username)
++	if err != nil {
++		return err
++	}
++	if !managed {
++		return ErrSambaUserNotManaged
++	}
++	// -s: read the password twice from stdin; -a: no-op for a known account
++	if output, err := runAccountTool(password+"\n"+password+"\n", "smbpasswd", "-s", "-a", username); err != nil {
++		// the output can echo the account name, never the password
++		return fmt.Errorf("set the share password: %w: %s", err, strings.TrimSpace(string(output)))
++	}
++	return nil
++}
++
++// DeleteSambaUser removes a share account from Samba and from the system. It
++// refuses any account not created here. Whether a share still names it is the
++// caller's check (see the route).
++func DeleteSambaUser(username string) error {
++	if err := ValidateSambaUsername(username); err != nil {
++		return err
++	}
++	fields, found, err := sambaPasswdEntry(username)
++	if err != nil {
++		return err
++	}
++	if !found {
++		return nil
++	}
++	if !isSambaShareAccountEntry(fields) {
++		return ErrSambaUserNotManaged
++	}
++	if output, err := runAccountTool("", "smbpasswd", "-x", username); err != nil {
++		return fmt.Errorf("remove the Samba account: %w: %s", err, strings.TrimSpace(string(output)))
++	}
++	if output, err := runAccountTool("", "userdel", username); err != nil {
++		return fmt.Errorf("remove the system account: %w: %s", err, strings.TrimSpace(string(output)))
++	}
++	return nil
++}
++
++// setShareDirectoryOwner hands the top directory of a share to its account
++// (account:account, 0770) or, with an empty username, back to root (0755).
++// Without it the directory stays root-owned while the Samba session runs as
++// the account (force user): the share authenticates and then refuses every
++// write. Only the top directory changes, through the pinned management roots;
++// the returned function restores the previous owner and mode.
++func setShareDirectoryOwner(roots *filesecurity.ManagedRoots, path, username string) (func() error, error) {
++	uid, gid, mode := 0, 0, os.FileMode(0o755)
++	if username != "" {
++		fields, found, err := sambaPasswdEntry(username)
++		if err != nil {
++			return nil, err
++		}
++		if !found || !isSambaShareAccountEntry(fields) {
++			return nil, ErrSambaUserNotManaged
++		}
++		if uid, err = strconv.Atoi(fields[2]); err != nil {
++			return nil, fmt.Errorf("account uid: %w", err)
++		}
++		if gid, err = strconv.Atoi(fields[3]); err != nil {
++			return nil, fmt.Errorf("account gid: %w", err)
++		}
++		mode = 0o770
++	}
++	directory, err := roots.OpenDirectory(path)
++	if err != nil {
++		return nil, fmt.Errorf("open share directory: %w", err)
++	}
++	previous, err := directory.Stat()
++	if err != nil {
++		_ = directory.Close()
++		return nil, fmt.Errorf("inspect share directory: %w", err)
++	}
++	stat, ok := previous.Sys().(*syscall.Stat_t)
++	if !ok {
++		_ = directory.Close()
++		return nil, errors.New("inspect share directory: no ownership information")
++	}
++	restore := func() error {
++		defer directory.Close()
++		return errors.Join(directory.Chown(int(stat.Uid), int(stat.Gid)), directory.Chmod(previous.Mode().Perm()))
++	}
++	if err := errors.Join(directory.Chown(uid, gid), directory.Chmod(mode)); err != nil {
++		return nil, errors.Join(fmt.Errorf("hand the share directory to %q: %w", username, err), restore())
++	}
++	return restore, nil
++}
+diff --git a/service/samba_user_test.go b/service/samba_user_test.go
+new file mode 100644
+index 0000000..02036f8
+--- /dev/null
++++ b/service/samba_user_test.go
+@@ -0,0 +1,183 @@
++//go:build linux
++
++package service
++
++import (
++	"errors"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++// fakeAccountTools puts getent, useradd, userdel and smbpasswd on PATH,
++// backed by a passwd file in a temporary directory. smbpasswd records its
++// arguments and standard input, and fails when the file "smbpasswd.fail"
++// exists. Returns the directory.
++func fakeAccountTools(t *testing.T, passwd string) string {
++	t.Helper()
++	dir := t.TempDir()
++	write := func(name, content string, mode os.FileMode) {
++		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), mode); err != nil {
++			t.Fatal(err)
++		}
++	}
++	write("passwd", passwd, 0o600)
++	write("getent", `#!/bin/sh
++db="$(dirname "$0")/passwd"
++[ "$1" = passwd ] || exit 1
++if [ -z "$2" ]; then cat "$db"; exit 0; fi
++grep "^$2:" "$db" || exit 2
++`, 0o755)
++	// useradd --system --no-create-home --shell S --comment C NAME
++	write("useradd", `#!/bin/sh
++db="$(dirname "$0")/passwd"
++shell=""; comment=""
++while [ $# -gt 1 ]; do
++  case "$1" in --shell) shell="$2"; shift;; --comment) comment="$2"; shift;; esac
++  shift
++done
++echo "$1:x:990:990:$comment:/:$shell" >> "$db"
++`, 0o755)
++	write("userdel", `#!/bin/sh
++db="$(dirname "$0")/passwd"
++grep -v "^$1:" "$db" > "$db.new"; mv "$db.new" "$db"
++`, 0o755)
++	write("smbpasswd", `#!/bin/sh
++dir="$(dirname "$0")"
++printf '%s\n' "$*" >> "$dir/smbpasswd.args"
++cat >> "$dir/smbpasswd.stdin"
++[ -e "$dir/smbpasswd.fail" ] && { echo "smbpasswd: failed" >&2; exit 1; }
++exit 0
++`, 0o755)
++	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
++	nologin := filepath.Join(dir, "nologin")
++	write("nologin", "#!/bin/sh\nexit 1\n", 0o755)
++	previous := sambaNologinCandidates
++	sambaNologinCandidates = []string{nologin}
++	t.Cleanup(func() { sambaNologinCandidates = previous })
++	return dir
++}
++
++func readFakeFile(t *testing.T, dir, name string) string {
++	t.Helper()
++	data, err := os.ReadFile(filepath.Join(dir, name))
++	if err != nil && !errors.Is(err, os.ErrNotExist) {
++		t.Fatal(err)
++	}
++	return string(data)
++}
++
++const systemPasswd = "root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/:/usr/sbin/nologin\n"
++
++func TestCreateSambaUserMakesANoLoginShareAccount(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	if err := CreateSambaUser("alice", "s3cret pass"); err != nil {
++		t.Fatalf("CreateSambaUser() error = %v", err)
++	}
++	passwd := readFakeFile(t, dir, "passwd")
++	if !strings.Contains(passwd, "alice:x:990:990:"+sambaAccountComment+":/:"+filepath.Join(dir, "nologin")) {
++		t.Fatalf("passwd = %q", passwd)
++	}
++	if args := readFakeFile(t, dir, "smbpasswd.args"); args != "-s -a alice\n" {
++		t.Fatalf("smbpasswd args = %q: the password must not be an argument", args)
++	}
++	if stdin := readFakeFile(t, dir, "smbpasswd.stdin"); stdin != "s3cret pass\ns3cret pass\n" {
++		t.Fatalf("smbpasswd stdin = %q", stdin)
++	}
++	users, err := ListSambaUsers()
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(users) != 1 || users[0] != "alice" {
++		t.Fatalf("ListSambaUsers() = %v, want only the share account (not root, not nobody)", users)
++	}
++}
++
++func TestCreateSambaUserRemovesTheAccountWhenSambaFails(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	if err := os.WriteFile(filepath.Join(dir, "smbpasswd.fail"), nil, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if err := CreateSambaUser("alice", "pw"); err == nil {
++		t.Fatal("CreateSambaUser() succeeded although smbpasswd failed")
++	}
++	if strings.Contains(readFakeFile(t, dir, "passwd"), "alice:") {
++		t.Fatal("a system account was left behind that Samba never learned about")
++	}
++}
++
++func TestCreateSambaUserRejects(t *testing.T) {
++	fakeAccountTools(t, systemPasswd)
++	for name, tc := range map[string]struct {
++		username, password string
++		want               error
++	}{
++		"existing account":   {"root", "pw", ErrSambaUserExists},
++		"uppercase":          {"Alice", "pw", ErrSambaUsernameInvalid},
++		"config injection":   {"a\nforce user = root", "pw", ErrSambaUsernameInvalid},
++		"leading digit":      {"1alice", "pw", ErrSambaUsernameInvalid},
++		"too long":           {strings.Repeat("a", 32), "pw", ErrSambaUsernameInvalid},
++		"empty password":     {"alice", "", ErrSambaPasswordEmpty},
++		"multiline password": {"alice", "pw\nother", ErrSambaPasswordInvalid},
++	} {
++		if err := CreateSambaUser(tc.username, tc.password); !errors.Is(err, tc.want) {
++			t.Errorf("%s: err = %v, want %v", name, err, tc.want)
++		}
++	}
++}
++
++// Only accounts created here may be re-keyed or removed: never root, never an
++// unrelated nologin account.
++func TestSystemAccountsAreNotManageable(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	for _, name := range []string{"root", "nobody"} {
++		if err := SetSambaPassword(name, "pw"); !errors.Is(err, ErrSambaUserNotManaged) {
++			t.Errorf("SetSambaPassword(%s) err = %v", name, err)
++		}
++		if err := DeleteSambaUser(name); !errors.Is(err, ErrSambaUserNotManaged) {
++			t.Errorf("DeleteSambaUser(%s) err = %v", name, err)
++		}
++		if managed, err := IsSambaShareAccount(name); err != nil || managed {
++			t.Errorf("IsSambaShareAccount(%s) = %v, %v", name, managed, err)
++		}
++	}
++	if readFakeFile(t, dir, "smbpasswd.args") != "" {
++		t.Fatal("smbpasswd ran for a system account")
++	}
++	if readFakeFile(t, dir, "passwd") != systemPasswd {
++		t.Fatal("system accounts changed")
++	}
++}
++
++func TestDeleteSambaUser(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	if err := CreateSambaUser("alice", "pw"); err != nil {
++		t.Fatal(err)
++	}
++	if err := DeleteSambaUser("alice"); err != nil {
++		t.Fatalf("DeleteSambaUser() error = %v", err)
++	}
++	if strings.Contains(readFakeFile(t, dir, "passwd"), "alice:") {
++		t.Fatal("account still present")
++	}
++	if !strings.Contains(readFakeFile(t, dir, "smbpasswd.args"), "-x alice") {
++		t.Fatal("not removed from Samba")
++	}
++	if err := DeleteSambaUser("alice"); err != nil {
++		t.Fatalf("deleting a missing account: %v", err)
++	}
++}
++
++func TestSetSambaPasswordRekeysAShareAccount(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	if err := CreateSambaUser("alice", "old"); err != nil {
++		t.Fatal(err)
++	}
++	if err := SetSambaPassword("alice", "new"); err != nil {
++		t.Fatalf("SetSambaPassword() error = %v", err)
++	}
++	if !strings.HasSuffix(readFakeFile(t, dir, "smbpasswd.stdin"), "new\nnew\n") {
++		t.Fatal("new password not written to smbpasswd")
++	}
++}
+diff --git a/service/shares.go b/service/shares.go
+index 3034164..bd616fa 100644
+--- a/service/shares.go
++++ b/service/shares.go
+@@ -42,6 +42,7 @@ type SharesService interface {
+ 	CreateShare(share model2.SharesDBModel) error
+ 	CreateShares(shares []model2.SharesDBModel) error
+ 	DeleteShare(id string) error
++	SetShareUsername(id string, username string) error
+ 	UpdateConfigFile() error
+ 	InitSambaConfig() error
+ 	ReconcileSambaConfig() error
+@@ -56,6 +57,9 @@ type sharesStruct struct {
+ 	managementRoots       func() (*filesecurity.ManagedRoots, error)
+ 	validateCandidate     func([]byte) error
+ 	restartSMBD           func() error
++	// setShareOwner hands a share directory to its account (or to root);
++	// tests replace it, the default is setShareDirectoryOwner.
++	setShareOwner         func(roots *filesecurity.ManagedRoots, path, username string) (func() error, error)
+ 	beforeConfigPublish   func(string)
+ 	beforeConfigCleanup   func(string)
+ 	commitLegacyMigration func(*gorm.DB) error
+@@ -94,7 +98,7 @@ func (s *sharesStruct) GetSharesByPath(path string) (shares []model2.SharesDBMod
+ }
+ 
+ func (s *sharesStruct) GetSharesList() (shares []model2.SharesDBModel) {
+-	s.db.Select("anonymous,path,id").Find(&shares)
++	s.db.Select("anonymous,path,name,username,id").Find(&shares)
+ 	return
+ }
+ 
+@@ -188,20 +192,112 @@ func (s *sharesStruct) CreateShares(shares []model2.SharesDBModel) error {
+ 	if err := transaction.Create(&shares).Error; err != nil {
+ 		return errors.Join(fmt.Errorf("create shares: %w", err), transaction.Rollback().Error)
+ 	}
++	restoreOwners, err := s.applyShareOwners(managementRoots, shares, false)
++	if err != nil {
++		return errors.Join(err, transaction.Rollback().Error)
++	}
+ 	candidate, err := s.renderConfigFromDB(transaction, managementRoots)
++	if err != nil {
++		return errors.Join(err, transaction.Rollback().Error, restoreOwners())
++	}
++	mutation, err := s.publishCandidateLocked(candidate, state)
++	if err != nil {
++		return errors.Join(err, transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwners())
++	}
++	if err := transaction.Commit().Error; err != nil {
++		return errors.Join(fmt.Errorf("commit share transaction: %w", err), transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwners())
++	}
++	return nil
++}
++
++// SetShareUsername restricts a share to one share account, or lifts the
++// restriction with an empty username, and republishes the config in the same
++// transaction as the row: either both change or neither.
++func (s *sharesStruct) SetShareUsername(id string, username string) error {
++	if username != "" {
++		if err := ValidateSambaUsername(username); err != nil {
++			return err
++		}
++	}
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	releaseConfigLock, err := s.acquireConfigProcessLock()
++	if err != nil {
++		return err
++	}
++	defer releaseConfigLock()
++	state, err := s.captureConfigStateLocked()
++	if err != nil {
++		return err
++	}
++	managementRoots, err := s.managementFileRoots()
++	if err != nil {
++		return err
++	}
++	transaction := s.db.Begin()
++	if transaction.Error != nil {
++		return fmt.Errorf("begin share transaction: %w", transaction.Error)
++	}
++	share := model2.SharesDBModel{}
++	if err := transaction.Where("id = ?", id).First(&share).Error; err != nil {
++		return errors.Join(fmt.Errorf("load share: %w", err), transaction.Rollback().Error)
++	}
++	if err := transaction.Model(&share).Update("username", username).Error; err != nil {
++		return errors.Join(fmt.Errorf("update share account: %w", err), transaction.Rollback().Error)
++	}
++	restoreOwner, err := s.shareOwner()(managementRoots, share.Path, username)
+ 	if err != nil {
+ 		return errors.Join(err, transaction.Rollback().Error)
+ 	}
++	candidate, err := s.renderConfigFromDB(transaction, managementRoots)
++	if err != nil {
++		return errors.Join(err, transaction.Rollback().Error, restoreOwner())
++	}
+ 	mutation, err := s.publishCandidateLocked(candidate, state)
+ 	if err != nil {
+-		return errors.Join(err, transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation))
++		return errors.Join(err, transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwner())
+ 	}
+ 	if err := transaction.Commit().Error; err != nil {
+-		return errors.Join(fmt.Errorf("commit share transaction: %w", err), transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation))
++		return errors.Join(fmt.Errorf("commit share transaction: %w", err), transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwner())
+ 	}
+ 	return nil
+ }
+ 
++func (s *sharesStruct) shareOwner() func(*filesecurity.ManagedRoots, string, string) (func() error, error) {
++	if s.setShareOwner != nil {
++		return s.setShareOwner
++	}
++	return setShareDirectoryOwner
++}
++
++// applyShareOwners hands each share's directory to its account; the returned
++// function undoes all of it.
++func (s *sharesStruct) applyShareOwners(roots *filesecurity.ManagedRoots, shares []model2.SharesDBModel, release bool) (func() error, error) {
++	restores := []func() error{}
++	restoreAll := func() error {
++		var err error
++		for i := len(restores) - 1; i >= 0; i-- {
++			err = errors.Join(err, restores[i]())
++		}
++		return err
++	}
++	for _, share := range shares {
++		if share.Username == "" {
++			continue
++		}
++		username := share.Username
++		if release {
++			username = ""
++		}
++		restore, err := s.shareOwner()(roots, share.Path, username)
++		if err != nil {
++			return nil, errors.Join(err, restoreAll())
++		}
++		restores = append(restores, restore)
++	}
++	return restoreAll, nil
++}
++
+ func (s *sharesStruct) DeleteShare(id string) error {
+ 	s.mu.Lock()
+ 	defer s.mu.Unlock()
+@@ -229,16 +325,21 @@ func (s *sharesStruct) DeleteShare(id string) error {
+ 	if err := transaction.Delete(&share).Error; err != nil {
+ 		return errors.Join(fmt.Errorf("delete share: %w", err), transaction.Rollback().Error)
+ 	}
+-	candidate, err := s.renderConfigFromDB(transaction, managementRoots)
++	// a share account must not keep the folder after its share is gone
++	restoreOwners, err := s.applyShareOwners(managementRoots, []model.SharesDBModel{share}, true)
+ 	if err != nil {
+ 		return errors.Join(err, transaction.Rollback().Error)
+ 	}
++	candidate, err := s.renderConfigFromDB(transaction, managementRoots)
++	if err != nil {
++		return errors.Join(err, transaction.Rollback().Error, restoreOwners())
++	}
+ 	mutation, err := s.publishCandidateLocked(candidate, state)
+ 	if err != nil {
+-		return errors.Join(err, transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation))
++		return errors.Join(err, transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwners())
+ 	}
+ 	if err := transaction.Commit().Error; err != nil {
+-		return errors.Join(fmt.Errorf("commit share transaction: %w", err), transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation))
++		return errors.Join(fmt.Errorf("commit share transaction: %w", err), transaction.Rollback().Error, s.restoreConfigStateLocked(state, mutation), restoreOwners())
+ 	}
+ 	return nil
+ }
+@@ -426,7 +527,7 @@ func (s *sharesStruct) renderConfigFromDB(database *gorm.DB, managementRoots *fi
+ 
+ func loadSambaShares(database *gorm.DB) ([]model2.SharesDBModel, error) {
+ 	shares := []model2.SharesDBModel{}
+-	if err := database.Select("id,anonymous,path,name").Order("id ASC").Find(&shares).Error; err != nil {
++	if err := database.Select("id,anonymous,path,name,username").Order("id ASC").Find(&shares).Error; err != nil {
+ 		return nil, fmt.Errorf("load Samba shares: %w", err)
+ 	}
+ 	if len(shares) > maxManagedSambaShares {
+@@ -902,6 +1003,18 @@ func renderSambaSharesConfig(managementRoots *filesecurity.ManagedRoots, shares
+ 		}
+ 		seenPaths[canonicalPath] = struct{}{}
+ 		seenNames[nameKey] = struct{}{}
++		// Re-validated here, not only at the API: the name is written into the
++		// config. A share without an account renders exactly as before.
++		account := ""
++		if share.Username != "" {
++			if err := ValidateSambaUsername(share.Username); err != nil {
++				return nil, fmt.Errorf("validate Samba share %d: %w", share.ID, err)
++			}
++			// valid users and force user together: one without the other
++			// either leaves the share open to every Samba account or hands
++			// the files to whoever connected
++			account = fmt.Sprintf("valid users = %s\nforce user = %s\n", share.Username, share.Username)
++		}
+ 
+ 		_, _ = fmt.Fprintf(&configBuilder, `
+ [%s]
+@@ -915,8 +1028,8 @@ create mask = 0660
+ directory mask = 0770
+ follow symlinks = no
+ wide links = no
+-
+-`, canonicalName, canonicalPath)
++%s
++`, canonicalName, canonicalPath, account)
+ 	}
+ 	candidate := []byte(configBuilder.String())
+ 	if err := validateSambaCandidateSize(candidate); err != nil {
+diff --git a/service/shares_account_test.go b/service/shares_account_test.go
+new file mode 100644
+index 0000000..2f5143b
+--- /dev/null
++++ b/service/shares_account_test.go
+@@ -0,0 +1,167 @@
++//go:build linux
++
++package service
++
++import (
++	"errors"
++	"os"
++	"path/filepath"
++	"strconv"
++	"strings"
++	"testing"
++
++	"github.com/IceWhaleTech/CasaOS/pkg/filesecurity"
++	model2 "github.com/IceWhaleTech/CasaOS/service/model"
++)
++
++func TestRenderSambaSharesConfigRestrictsToTheAccount(t *testing.T) {
++	roots, rootPath := openSambaTestRoots(t)
++	sharePath := filepath.Join(rootPath, "Media")
++	if err := os.Mkdir(sharePath, 0o750); err != nil {
++		t.Fatal(err)
++	}
++	plain, err := renderSambaSharesConfig(roots, []model2.SharesDBModel{{ID: 1, Path: sharePath, Name: "Media"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if strings.Contains(string(plain), "valid users") || strings.Contains(string(plain), "force user") {
++		t.Fatalf("a share without an account changed its section: %q", plain)
++	}
++	restricted, err := renderSambaSharesConfig(roots, []model2.SharesDBModel{{ID: 1, Path: sharePath, Name: "Media", Username: "alice"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(string(restricted), "wide links = no\nvalid users = alice\nforce user = alice\n\n") {
++		t.Fatalf("restricted section = %q", restricted)
++	}
++	if strings.Replace(string(restricted), "valid users = alice\nforce user = alice\n", "", 1) != string(plain) {
++		t.Fatal("the account lines are not the only difference")
++	}
++	if _, err := renderSambaSharesConfig(roots, []model2.SharesDBModel{{ID: 1, Path: sharePath, Name: "Media", Username: "a\nforce user = root"}}); !errors.Is(err, ErrSambaUsernameInvalid) {
++		t.Fatalf("a database row with config syntax in the account rendered: err = %v", err)
++	}
++}
++
++func TestSetShareUsernamePublishesWithTheRowOrNeither(t *testing.T) {
++	roots, rootPath := openSambaTestRoots(t)
++	sharePath := filepath.Join(rootPath, "Media")
++	if err := os.Mkdir(sharePath, 0o750); err != nil {
++		t.Fatal(err)
++	}
++	database := openSambaTestDB(t)
++	configDirectory := t.TempDir()
++	sharesPath := filepath.Join(configDirectory, "smb.casa.conf")
++	mainPath := writeSambaTestMainConfig(t, configDirectory, sharesPath)
++	restartErr := error(nil)
++	owners := []string{}
++	shareService := &sharesStruct{
++		db:                    database,
++		sambaConfigPath:       mainPath,
++		sambaSharesConfigPath: sharesPath,
++		managementRoots:       func() (*filesecurity.ManagedRoots, error) { return roots, nil },
++		validateCandidate:     acceptSambaCandidate,
++		restartSMBD:           func() error { return restartErr },
++		setShareOwner: func(_ *filesecurity.ManagedRoots, path, username string) (func() error, error) {
++			owners = append(owners, username)
++			return func() error { owners = append(owners, "restore:"+username); return nil }, nil
++		},
++	}
++	if err := shareService.CreateShares([]model2.SharesDBModel{{Path: sharePath, Name: "Media"}}); err != nil {
++		t.Fatal(err)
++	}
++	share := model2.SharesDBModel{}
++	if err := database.First(&share).Error; err != nil {
++		t.Fatal(err)
++	}
++	id := strconv.FormatUint(uint64(share.ID), 10)
++
++	if err := shareService.SetShareUsername(id, "alice"); err != nil {
++		t.Fatalf("SetShareUsername() error = %v", err)
++	}
++	fragment, _ := os.ReadFile(sharesPath)
++	if !strings.Contains(string(fragment), "valid users = alice") {
++		t.Fatalf("fragment = %q", fragment)
++	}
++	// the routes read the account back through these
++	if listed := shareService.GetSharesList(); len(listed) != 1 || listed[0].Username != "alice" || listed[0].Name != "Media" {
++		t.Fatalf("GetSharesList() = %+v, want the account and name", listed)
++	}
++
++	// a failed restart rolls back both the row and the fragment
++	restartErr = errors.New("smbd failed")
++	if err := shareService.SetShareUsername(id, "bob"); err == nil {
++		t.Fatal("SetShareUsername() succeeded although the restart failed")
++	}
++	if err := database.First(&share, share.ID).Error; err != nil {
++		t.Fatal(err)
++	}
++	if share.Username != "alice" {
++		t.Fatalf("row username = %q after a failed publish, want alice", share.Username)
++	}
++	fragment, _ = os.ReadFile(sharesPath)
++	if !strings.Contains(string(fragment), "valid users = alice") || strings.Contains(string(fragment), "bob") {
++		t.Fatalf("fragment not restored: %q", fragment)
++	}
++
++	// the directory went to alice, then to bob and back when the publish failed
++	if strings.Join(owners, ",") != "alice,bob,restore:bob" {
++		t.Fatalf("directory owners = %v", owners)
++	}
++
++	restartErr = nil
++	if err := shareService.SetShareUsername(id, ""); err != nil {
++		t.Fatalf("lifting the restriction: %v", err)
++	}
++	fragment, _ = os.ReadFile(sharesPath)
++	if strings.Contains(string(fragment), "valid users") {
++		t.Fatalf("restriction not lifted: %q", fragment)
++	}
++	if err := shareService.SetShareUsername(id, "Bad Name"); !errors.Is(err, ErrSambaUsernameInvalid) {
++		t.Fatalf("invalid name: err = %v", err)
++	}
++}
++
++func TestSetShareDirectoryOwnerHandsTheTopDirectoryToTheAccount(t *testing.T) {
++	dir := fakeAccountTools(t, systemPasswd)
++	uid, gid := os.Getuid(), os.Getgid()
++	// an account entry carrying this process's own ids: chown to them needs no privilege
++	entry := "alice:x:" + strconv.Itoa(uid) + ":" + strconv.Itoa(gid) + ":" + sambaAccountComment + ":/:" + filepath.Join(dir, "nologin") + "\n"
++	if err := os.WriteFile(filepath.Join(dir, "passwd"), []byte(systemPasswd+entry), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	roots, rootPath := openSambaTestRoots(t)
++	sharePath := filepath.Join(rootPath, "Media")
++	if err := os.Mkdir(sharePath, 0o755); err != nil {
++		t.Fatal(err)
++	}
++	inside := filepath.Join(sharePath, "keep.txt")
++	if err := os.WriteFile(inside, nil, 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	restore, err := setShareDirectoryOwner(roots, sharePath, "alice")
++	if err != nil {
++		t.Fatalf("setShareDirectoryOwner() error = %v", err)
++	}
++	if info, _ := os.Stat(sharePath); info.Mode().Perm() != 0o770 {
++		t.Fatalf("share directory mode = %o, want 770", info.Mode().Perm())
++	}
++	if info, _ := os.Stat(inside); info.Mode().Perm() != 0o644 {
++		t.Fatalf("a file inside changed: mode %o (only the top directory may change)", info.Mode().Perm())
++	}
++	if err := restore(); err != nil {
++		t.Fatal(err)
++	}
++	if info, _ := os.Stat(sharePath); info.Mode().Perm() != 0o755 {
++		t.Fatalf("restored mode = %o, want 755", info.Mode().Perm())
++	}
++
++	for _, name := range []string{"root", "nobody", "missing"} {
++		if _, err := setShareDirectoryOwner(roots, sharePath, name); !errors.Is(err, ErrSambaUserNotManaged) {
++			t.Errorf("handing the directory to %s: err = %v", name, err)
++		}
++	}
++	if _, err := setShareDirectoryOwner(roots, "/etc", "alice"); err == nil {
++		t.Fatal("a directory outside the management roots was handed over")
++	}
++}
