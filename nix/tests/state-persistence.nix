@@ -1,5 +1,5 @@
 # T4 — state persistence: the cold/hot boundary of task 3.2. Hot state (ReCasaOS accounts and databases,
-# runtime-created unix users, SSH host keys, configuration changed at runtime) must survive both a reboot
+# runtime-created unix users, SSH host keys, machine-id, the journal, configuration changed at runtime) must survive both a reboot
 # and the *replacement of the root disk* — which is what an image update does — while vendor-owned files
 # come back to their store content and cannot be tampered with persistently.
 { pkgs, modules }:
@@ -66,6 +66,11 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("grep -q '^alice:' /var/lib/recasanix/state/accounts/passwd", timeout=30)
         # config the services write at runtime
         machine.succeed("sed -i 's/^port=.*/port=80/; $a # touched at runtime' /etc/casaos/gateway.ini")
+        machine_id = machine.succeed("cat /etc/machine-id").strip()
+        machine.succeed("cmp /etc/machine-id /var/lib/recasanix/state/machine-id")
+        # the journal (log of record) is on the state filesystem
+        machine.succeed("findmnt -n -o SOURCE --target /var/log/journal | grep -q '\\[/journal\\]'")
+        machine.succeed("logger -t recasanix-t4 before-root-replacement && journalctl --flush")
         host_key = machine.succeed("ssh-keygen -lf /var/lib/recasanix/state/ssh/ssh_host_ed25519_key.pub").strip()
         # the services' hardened storage code refuses symlinks, so these are bind mounts of state directories
         for path, src in [("/etc/casaos", "casaos-etc"), ("/var/lib/casaos", "casaos")]:
@@ -96,6 +101,10 @@ pkgs.testers.runNixOSTest {
         # SSH host key unchanged
         assert machine.succeed("ssh-keygen -lf /var/lib/recasanix/state/ssh/ssh_host_ed25519_key.pub").strip() == host_key
         machine.succeed("ssh-keygen -lf /var/lib/recasanix/state/ssh/ssh_host_ed25519_key.pub | grep -q ED25519")
+        # device identity and the logs from before the update
+        assert machine.succeed("cat /etc/machine-id").strip() == machine_id
+        machine.succeed("journalctl -t recasanix-t4 | grep -q before-root-replacement")
+        machine.succeed("journalctl -q -b -1 -n 1 | grep -q .")  # the previous root's boot
         # runtime-written config kept
         machine.succeed("grep -q 'touched at runtime' /etc/casaos/gateway.ini")
 

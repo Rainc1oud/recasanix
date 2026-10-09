@@ -34,6 +34,14 @@ let
     options = [ "bind" ];
   };
 
+  # The journal is the log of record (the services tee their logs to stdout); persisted so a support case
+  # still has the logs from before an image update. Size capped in appliance.nix.
+  journalBind."/var/log/journal" = {
+    device = "${mp}/journal";
+    fsType = "none";
+    options = [ "bind" ];
+  };
+
   stateFileSystem.${mp} = {
     inherit (cfg) device autoFormat;
     fsType = "ext4";
@@ -103,6 +111,11 @@ in
         virtualisation.fileSystems = lib.mkIf config.services.samba.enable sambaBind;
       })
 
+      { fileSystems = journalBind; }
+      (lib.optionalAttrs (options ? virtualisation.fileSystems) {
+        virtualisation.fileSystems = journalBind;
+      })
+
       {
         # ReCasaOS: databases, user data and configuration move onto the state filesystem (the module
         # bind-mounts them at /var/lib/casaos and /etc/casaos, so nothing in the services needs to change).
@@ -131,27 +144,49 @@ in
         # replaces. Restore them from the state filesystem *before* the users activation merges in the
         # declared accounts, and mirror every change back. /var/lib/nixos holds the uid/gid allocation
         # maps that keep declared users' ids stable.
-        system.activationScripts.recasanixAccounts = {
-          deps = [ "specialfs" ];
-          text = ''
-            # (the bind-mount sources of the ReCasaOS directories must exist before local-fs mounts them)
-            mkdir -p ${mp}/accounts ${mp}/nixos ${mp}/samba ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
-            if [ ! -L /var/lib/nixos ]; then
-              if [ -d /var/lib/nixos ] && [ -z "$(ls -A ${mp}/nixos)" ]; then
-                cp -a /var/lib/nixos/. ${mp}/nixos/
+        system.activationScripts = {
+          recasanixAccounts = {
+            deps = [ "specialfs" ];
+            text = ''
+              # (the bind-mount sources of the ReCasaOS directories must exist before local-fs mounts them)
+              mkdir -p ${mp}/accounts ${mp}/nixos ${mp}/samba ${mp}/journal ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
+              if [ ! -L /var/lib/nixos ]; then
+                if [ -d /var/lib/nixos ] && [ -z "$(ls -A ${mp}/nixos)" ]; then
+                  cp -a /var/lib/nixos/. ${mp}/nixos/
+                fi
+                rm -rf /var/lib/nixos
+                ln -s ${mp}/nixos /var/lib/nixos
               fi
-              rm -rf /var/lib/nixos
-              ln -s ${mp}/nixos /var/lib/nixos
-            fi
-            for f in ${lib.escapeShellArgs accountFiles}; do
-              if [ -e "${mp}/accounts/$f" ]; then
-                cp -p "${mp}/accounts/$f" "/etc/$f.recasanix-restore"
-                mv -f "/etc/$f.recasanix-restore" "/etc/$f"
+              for f in ${lib.escapeShellArgs accountFiles}; do
+                if [ -e "${mp}/accounts/$f" ]; then
+                  cp -p "${mp}/accounts/$f" "/etc/$f.recasanix-restore"
+                  mv -f "/etc/$f.recasanix-restore" "/etc/$f"
+                fi
+              done
+            '';
+          };
+          users.deps = [ "recasanixAccounts" ];
+
+          # machine-id: one identity per device, not per root — journal directory, DHCP client id and
+          # anything else keyed on it must not change with an image update. Restored before systemd (stage 2)
+          # reads it; the first boot creates it and keeps it.
+          recasanixMachineId = {
+            deps = [ "specialfs" ];
+            text = ''
+              mkdir -p ${mp}
+              valid() { grep -qxE '[0-9a-f]{32}' "$1" 2>/dev/null; }
+              if ! valid ${mp}/machine-id; then
+                valid /etc/machine-id || ${lib.getExe' pkgs.systemd "systemd-id128"} new > /etc/machine-id
+                cp /etc/machine-id ${mp}/.machine-id.tmp
+                mv -f ${mp}/.machine-id.tmp ${mp}/machine-id
+              elif [ "$(cat ${mp}/machine-id)" != "$(cat /etc/machine-id 2>/dev/null)" ]; then
+                cp ${mp}/machine-id /etc/.machine-id.recasanix-restore
+                chmod 0444 /etc/.machine-id.recasanix-restore
+                mv -f /etc/.machine-id.recasanix-restore /etc/machine-id
               fi
-            done
-          '';
+            '';
+          };
         };
-        system.activationScripts.users.deps = [ "recasanixAccounts" ];
 
         # Mirroring. Three triggers, because none alone is reliable: the accounts tools replace files by
         # rename, which a path unit on the *file* did not see in practice (found in the VM: a user created

@@ -635,9 +635,10 @@ lose nothing on this filesystem**, and T4 proves it by deleting the root disk be
 | `/etc/passwd shadow group gshadow subuid subgid`, `/var/lib/nixos` | hot | `state/accounts`, `state/nixos` | `users.mutableUsers = true`. An activation script restores the files **before** the users activation merges the declared accounts; changes are mirrored back by a path unit on `/etc`, a 1-minute timer and a final copy at shutdown. `/var/lib/nixos` (uid/gid maps) is a symlink to state. |
 | SSH host keys | hot | `state/ssh` | `services.openssh.hostKeys` points there; the device keeps its identity across updates. |
 | `/var/run/casaos`, `/run/recasaos-*` | volatile | tmpfs | runtime URLs, sockets, credential drop directories of the local account units. |
-| `/var/log/casaos` | volatile-ish | root filesystem | lost on an image update. **TODO**: decide whether service logs should move to the journal or the state filesystem. |
-| `/etc/machine-id` | hot in principle | not persisted | **TODO**: journal and DHCP identity change with each new root. |
-| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | not wired | The root service generates `smb.casa.conf`, validates it with `testparm`, reloads smbd (the intended hot-state generator) but currently logs `reconcile samba config: lstat /etc/samba/smb.conf`. **TODO** with SMB scope: store baseline `smb.conf` with `include = <state>/samba/smb.casa.conf`. |
+| `/var/log/journal` | hot | `state/journal` (bind mount) | **log of record**: the services tee every log line to stdout → journal. Capped in `appliance.nix` (200M). Survives image updates (T4). |
+| `/var/log/casaos` | volatile | root filesystem | duplicate of the journal (upstream lumberjack files: 10 MB × 60, 1 day). Lost on an image update — by design. |
+| `/etc/machine-id` | hot | `state/machine-id` | restored by activation before systemd reads it; created on first boot. One identity per device: journal directory, DHCP client id. T4 asserts it across root replacement. |
+| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | Nix (`smb.conf`), root service (fragment) | Nix-owned `smb.conf` with `include = /etc/samba/smb.casa.conf`; root service in include-only mode writes the fragment, validates with `testparm`, reloads smbd. Share-account passdb: `/var/lib/samba` → `state/samba` (bind mount). T13/T14. |
 | Docker daemon config, Docker root | cold | Nix (task 3.3) | the API that rewrote `daemon.json` is not routed (see the register). |
 | Data pool `/var/lib/recasanix/data`, `/DATA` | hot | the pool | created and mounted at runtime; unrelated to the state filesystem. |
 
