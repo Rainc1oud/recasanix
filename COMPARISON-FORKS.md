@@ -67,7 +67,7 @@ Priority = value for appliance ÷ effort. "Upstream" = propose to EF first, carr
 | 10 | `_appstore` nightly mirror | ORG `_appstore` | point app-management store URL at a mirror we control (vendor-owned) | med |
 | 11 | Vue 3 UI + dark theme | UI | not portable piecemeal; only via option B | low (now) |
 | 12 | Go 1.26 + dep bumps, module renames in satellites | all | upstream pressure on EF; until then our build may bump `go` in derivations | low |
-| 13 | token-free access log, start.d after sd_notify, signing key survives user-service restart | root, Common | small patches | low |
+| 13 | token-free access log, start.d after sd_notify, signing key survives user-service restart | root, Common | access log: EF already (`safeRequestLogger`); start.d: ReCasaOS#159; signing key: UserService#21 | done (PRs) |
 
 Not taken: telemetry, auto-update, apt updates, installer, LocalStorage, mergerfs, git-deployed apps (re-evaluate when app story is defined).
 
@@ -135,7 +135,7 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 - Design: reuses EF's existing per-start `gateway.token` (gateway management API already requires it) instead of ORG's new `internal.secret` → no new file/scheme upstream.
 - **#1 is a security fix with a confirmed exploit** on pinned upstream (LAN client + `Host: unix` through the gateway → 200, full bus API). Pre-alpha everywhere → plain public PR (owner decision 2026-10-07).
 - Websocket subscriptions: T-1..T-3 (tickets instead of URL tokens, which EF refuses). Not in series: our Bearer-acceptance patches (msgbus, appmgmt, UI) → separate PRs, todo.
-- Harvest #3 (Samba account shares): S-A, S-B, S-C0, S-C done, verified by T13 (backend, smbclient) and T14 (browser). Open: EF's *managed* main template still has `map to guest = bad user` (a refused login is denied instead of prompted) → follow-up PR, needs a managed-template migration. EF UI drops the whole app grid (built-in Files included) when the app-grid request fails → follow-up PR.
+- Harvest #3 (Samba account shares): S-A, S-B, S-C0, S-C done, verified by T13 (backend, smbclient) and T14 (browser). Follow-ups: managed template `map to guest` → ReCasaOS#159; app grid failure → ReCasaOS-UI#15.
 
 ### Upstream PRs (2026-10-07)
 
@@ -165,5 +165,12 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 | UI storage `.finally` typo | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/13 | open |
 | UserService drop local-storage listener | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/20 | open |
 | ReCasaOS bash from PATH | https://github.com/EdmundFu-233/ReCasaOS/pull/155 | merged |
+| ReCasaOS Samba `map to guest = never` (v1→v2 upgrade) + start.d runner | https://github.com/EdmundFu-233/ReCasaOS/pull/159 | open |
+| UserService signing key survives a restart | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/21 | open |
+| UI app grid failure keeps built-in apps | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/15 | open |
 
 - consumed via `recasanix-preview` branches of the forks (`nix/pins/preview.json`) until merged
+
+### Batching (owner, 2026-10-10)
+- fewer PRs: one per repo/theme, one commit per concern, items tabled in the description
+- wallpaper/avatar `?token=`: not a UI fix — EF answers the legacy image routes with 410, replacement = EF UserService#4 (object-bound media) → parity item (custom avatar/wallpaper)

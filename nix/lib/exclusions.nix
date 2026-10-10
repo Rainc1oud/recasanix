@@ -173,7 +173,7 @@ rec {
         path = "main.go: command.ExecuteScripts(/etc/casaos/start.d)";
         kind = "finding";
         why = "Executes every script in /etc/casaos/start.d at startup (CasaOS-Common command.ExecuteScripts, via /bin/sh) — arbitrary code execution from a config directory. The one legitimate occupant is the UI's register-ui-events.sh (registers UI event types with the message bus; shebang normalised to `/usr/bin/env bash`, needs curl on the unit's PATH — task 3.1).";
-        replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4 asserts this).";
+        replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4 asserts this). Runner (shebang ignored, no timeout, before readiness) replaced upstream: PR ReCasaOS#159.";
         caller = "TODO — kept deliberately (needed for UI events); vendor-owned and rebuilt each boot (task 3.2)";
       }
       {

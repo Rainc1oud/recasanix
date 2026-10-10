@@ -44,6 +44,7 @@ with sync_playwright() as p:
     page.evaluate(CLICK_LOGIN)
     page.wait_for_timeout(20000)  # long enough for the UI to fire its startup requests and any refresh/logout cycle
 
+    files_cards = page.locator("[id='app-Files']").count()
     url = page.url
     storage = page.evaluate("() => Object.fromEntries(Object.entries(localStorage))")
     browser.close()
@@ -61,6 +62,11 @@ if not storage.get("access_token"):
     failed.append("no access_token left in localStorage")
 if unauthorized:
     failed.append(f"{len(unauthorized)} request(s) answered 401")
+# no Docker in this VM → the app grid request fails; the built-in apps must still show (PR ReCasaOS-UI, app grid)
+if not any(e[0] == "GET" and e[1] >= 500 and "/v2/app_management/web/appgrid" in e[2] for e in log):
+    failed.append("app grid did not fail: this check no longer exercises the failure path")
+if not files_cards:
+    failed.append("built-in Files app not shown while the app grid fails")
 # the subscription is authenticated with a one-use ticket (PRs ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7, ReCasaOS-UI#10):
 # without one the bus refuses the handshake and the dashboard silently gets no events
 if not bus_frames:

@@ -95,6 +95,8 @@ pkgs.testers.runNixOSTest {
         machine.succeed("findmnt -M /var/lib/recasanix/state -t ext4")
         # ReCasaOS: the database (admin account) and the bootstrap seal came back — login works, no re-bootstrap
         machine.succeed("curl -s http://localhost/v1/users/status | grep -q '\"initialized\":true'")
+        # the session from before the update is still valid: the signing key is hot state (PR ReCasaOS-UserService)
+        machine.succeed(f"curl -fsS -H 'Authorization: Bearer {token}' http://localhost/v1/users/current")
         token = login()
         # the runtime-created unix user, with the same uid
         assert machine.succeed("id -u alice").strip() == uid
