@@ -164,6 +164,6 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 | UI reproducible build env | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/12 | open |
 | UI storage `.finally` typo | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/13 | open |
 | UserService drop local-storage listener | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/20 | open |
-| ReCasaOS bash from PATH | https://github.com/EdmundFu-233/ReCasaOS/pull/155 | open |
+| ReCasaOS bash from PATH | https://github.com/EdmundFu-233/ReCasaOS/pull/155 | merged |
 
 - consumed via `recasanix-preview` branches of the forks (`nix/pins/preview.json`) until merged

@@ -4,11 +4,9 @@
     "recasaos": {
       "upstream": "EdmundFu-233/ReCasaOS",
       "fork": "ppenguin/ReCasaOS-EF",
-      "prs": [
-        "fix/bash-from-path"
-      ],
-      "base": "456bf16d2653bd0ffc6996ce5abdbab10d0f914a",
-      "head": "6beddd829660b0821b6e4fabfaca0f639df5b034"
+      "prs": [],
+      "base": "eba7a313f4156d31f23fe9ba0e05e1c25527b937",
+      "head": "eba7a313f4156d31f23fe9ba0e05e1c25527b937"
     },
     "recasaos-message-bus": {
       "upstream": "EdmundFu-233/ReCasaOS-MessageBus",
@@ -22,7 +20,7 @@
         "fix/accept-bearer-authorization"
       ],
       "base": "f6666910c8c634c7529c2c47bcb1edc6df4ca92d",
-      "head": "980469e85831b2f0a7a98514c71c18327241fa88"
+      "head": "76eb7c57334cf1fa3916b3b07e26412e7831080a"
     },
     "recasaos-app-management": {
       "upstream": "EdmundFu-233/ReCasaOS-AppManagement",
@@ -33,7 +31,7 @@
         "fix/loopback-needs-service-credential"
       ],
       "base": "6fe9af7111653d041d65460b19b61f1cdf7f0673",
-      "head": "2a9224c20b0cea4b18d9ade730b2cd9db3a91524"
+      "head": "48a057c579e3fa5726a4210c913b366cd944c65e"
     },
     "recasaos-user-service": {
       "upstream": "EdmundFu-233/ReCasaOS-UserService",
@@ -43,7 +41,7 @@
         "feat/message-bus-service-credential"
       ],
       "base": "f25e495df180238e7937104f79a6e55b97bcd208",
-      "head": "4b195938c5dd297e6eab05359f095fb7b6a658cf"
+      "head": "26c793aabc22ea3b8fa89ac4c65589aa1f430f33"
     },
     "casaos-ui": {
       "upstream": "EdmundFu-233/ReCasaOS-UI",
@@ -59,7 +57,7 @@
         "feat/bus-subscription-ticket"
       ],
       "base": "0d6cf15eae7c94aa097b8940f947b149ce844ed7",
-      "head": "6012c08b816748e9ffbc9c1b97440816d118640a"
+      "head": "45a02a7b989a01e1b9bba3df954e976d598cc9ec"
     }
   }
 }

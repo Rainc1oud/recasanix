@@ -9,7 +9,7 @@ mkCasaosGo {
   # upstream: common/constants.go (VERSION)
   version = "0.4.17-recasaos.1";
   inherit src;
-  vendorHash = "sha256-6qHqDTIWl6HU8HOtf16nOdz2Et8iPcIVp6vxYZAmo+I=";
+  vendorHash = "sha256-GB98MgIJ2VrRRxeTs5+7kVsLIhdY3YH12kaDbN3kIgA=";
 
   # Deviation from upstream (CGO_ENABLED=1, CGO_LDFLAGS=-static, UPX): nothing in the tree uses cgo
   # (`grep -rn 'import "C"'` is empty; sqlite is glebarez/modernc, pure Go), so build with
