@@ -58,8 +58,8 @@ Priority = value for appliance ÷ effort. "Upstream" = propose to EF first, carr
 | 1 | internal-secret service auth, loopback ≠ identity | Gateway, Common `external/internal_auth.go`, all services | port to EF msgbus/appmgmt; upstream to EF. Kills RealIP trust (XFF-spoof class, CVE-2023-37265-like) | **high** |
 | 2 | systemd power actions (`systemctl poweroff/reboot`, errors propagated) | root `service/system.go` | replaces our open `init 0/6` finding | **high** |
 | 3 | Samba: account-restricted shares, `map to guest = never`, testparm + rollback, share-path confinement, dup-name fix | root `service/shares*.go`, `samba_user.go` | fits our generate→validate→reload hot-state pattern; needs `smbpasswd` on unit `path` | high |
-| 4 | Time Machine shares (`vfs_fruit`) | root shares | needs `samba` w/ vfs modules in closure (cold) | med |
-| 5 | SMB discovery (mDNS + wsdd, no SMB1) | root `smb-discovery.sh`, `casaos-wsdd.service` | **don't port code** — `services.samba-wsdd` + `services.avahi` in Nix (cold layer) | med (cheap) |
+| 4 | Time Machine shares (`vfs_fruit`) | root shares | ReCasaOS#159 (`time_machine`, org JSON); Samba with mDNS (Nix) | done (PR) |
+| 5 | SMB discovery (mDNS + wsdd, no SMB1) | root `smb-discovery.sh`, `casaos-wsdd.service` | Nix: `samba-wsdd` + avahi + `samba.override { enableMDNS = true; }` (nixpkgs default: no mDNS → smbd announced nothing) | done (T13) |
 | 6 | Gateway HTTPS w/ supplied cert | Gateway | cert path on state partition; or skip, terminate TLS in Caddy/nginx module | med |
 | 7 | 2FA (TOTP + bcrypt recovery codes, CAS writes) | UserService + UI | port onto EF user-service (EF has argon2 already) | med |
 | 8 | Compose editor w/ validation, per-container stack view, per-service update decisions, scheduled image-update checks, logs/terminal | AppMgmt + UI | large; wait for EF or rebase AppMgmt on ORG (see option B) | med |
@@ -165,7 +165,7 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 | UI storage `.finally` typo | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/13 | open |
 | UserService drop local-storage listener | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/20 | open |
 | ReCasaOS bash from PATH | https://github.com/EdmundFu-233/ReCasaOS/pull/155 | merged |
-| ReCasaOS Samba `map to guest = never` (v1→v2 upgrade) + start.d runner | https://github.com/EdmundFu-233/ReCasaOS/pull/159 | open |
+| ReCasaOS Samba `map to guest = never` (v1→v2 upgrade) + Time Machine shares + start.d runner | https://github.com/EdmundFu-233/ReCasaOS/pull/159 | open |
 | UserService signing key survives a restart | https://github.com/EdmundFu-233/ReCasaOS-UserService/pull/21 | open |
 | UI app grid failure keeps built-in apps | https://github.com/EdmundFu-233/ReCasaOS-UI/pull/15 | open |
 
@@ -174,3 +174,4 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 ### Batching (owner, 2026-10-10)
 - fewer PRs: one per repo/theme, one commit per concern, items tabled in the description
 - wallpaper/avatar `?token=`: not a UI fix — EF answers the legacy image routes with 410, replacement = EF UserService#4 (object-bound media) → parity item (custom avatar/wallpaper)
+- follow-up (not filed): smbd *reload* instead of restart on share edits (no dropped sessions, e.g. a running Time Machine backup) — needs closing sessions on shares whose access was narrowed; until then: smbd start limit lifted in Nix

@@ -3,11 +3,11 @@
     "casaos-ui": {
       "flake": false,
       "locked": {
-        "lastModified": 1791637666,
+        "lastModified": 1791638565,
         "narHash": "sha256-Q6UzrPHkgaAFk+aD09VFMZlc29VO5TKdXFVIy3aYJhw=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-UI-EF",
-        "rev": "37aeab74b0a3014bab433be5fc3cab55bd5cded4",
+        "rev": "f72151ad1b8b6c3dcec722a12cf5a52a641537b7",
         "type": "github"
       },
       "original": {
@@ -91,11 +91,11 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1791637675,
-        "narHash": "sha256-UQmQcwmorogWSfhuNBEj/xtc3IgzK8oHA7INXoJ2xuc=",
+        "lastModified": 1791638576,
+        "narHash": "sha256-e68GWEm4Tqys1bJQUg6uajSGCFLFBG6aeuEcTeUQ1kg=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-EF",
-        "rev": "08d201debcaaaada095f3681c0cacbb6a0046b15",
+        "rev": "7ad198b50705b423a82a86b05e1541ab73ebd6db",
         "type": "github"
       },
       "original": {
@@ -108,11 +108,11 @@
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1791637678,
+        "lastModified": 1791638579,
         "narHash": "sha256-5iBHXeQvxNwZn10TCNUdsgowvjVBl5eeu/QjiPPaDUw=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-AppManagement-EF",
-        "rev": "debb14d154e324a05ef046f2f1fb069ac0e09e21",
+        "rev": "3d611e4c8f809410a09100707d79b0f30f8ec8b5",
         "type": "github"
       },
       "original": {
@@ -141,11 +141,11 @@
     "recasaos-message-bus": {
       "flake": false,
       "locked": {
-        "lastModified": 1791637681,
+        "lastModified": 1791638582,
         "narHash": "sha256-jj7qHoYf4nW4zjuxRu+fYJXt4EwSoK2bR5LHsvoNaDY=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-MessageBus-EF",
-        "rev": "00530256f901435f353d9531343564b01df07a4c",
+        "rev": "fac9b4fd3b3ad5d5f67cf1b3329d4ad1163ee000",
         "type": "github"
       },
       "original": {
@@ -158,11 +158,11 @@
     "recasaos-user-service": {
       "flake": false,
       "locked": {
-        "lastModified": 1791637684,
+        "lastModified": 1791638585,
         "narHash": "sha256-Gwa9KrLQuZ8DRV1leRheWxasvP9eYf1/Rwt5u6McEDQ=",
         "owner": "ppenguin",
         "repo": "ReCasaOS-UserService-EF",
-        "rev": "88e8a72149b086d1c46bc8c008b5251173874956",
+        "rev": "9d1750169af0055fae8cdb9fe32515904d72d8f9",
         "type": "github"
       },
       "original": {

@@ -638,7 +638,7 @@ lose nothing on this filesystem**, and T4 proves it by deleting the root disk be
 | `/var/log/journal` | hot | `state/journal` (bind mount) | **log of record**: the services tee every log line to stdout → journal. Capped in `appliance.nix` (200M). Survives image updates (T4). |
 | `/var/log/casaos` | volatile | root filesystem | duplicate of the journal (upstream lumberjack files: 10 MB × 60, 1 day). Lost on an image update — by design. |
 | `/etc/machine-id` | hot | `state/machine-id` | restored by activation before systemd reads it; created on first boot. One identity per device: journal directory, DHCP client id. T4 asserts it across root replacement. |
-| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | Nix (`smb.conf`), root service (fragment) | Nix-owned `smb.conf` with `include = /etc/samba/smb.casa.conf`; root service in include-only mode writes the fragment, validates with `testparm`, reloads smbd. Share-account passdb: `/var/lib/samba` → `state/samba` (bind mount). T13/T14. |
+| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | Nix (`smb.conf`), root service (fragment) | Nix-owned `smb.conf` with `include = /etc/samba/smb.casa.conf`; root service in include-only mode writes the fragment, validates with `testparm`, restarts smbd (start limit lifted). Share-account passdb: `/var/lib/samba` → `state/samba` (bind mount). T13/T14. |
 | Docker daemon config, Docker root | cold | Nix (task 3.3) | the API that rewrote `daemon.json` is not routed (see the register). |
 | Data pool `/var/lib/recasanix/data`, `/DATA` | hot | the pool | created and mounted at runtime; unrelated to the state filesystem. |
 
@@ -849,7 +849,7 @@ GitLab CI later). All of these must run without hardware.
 | T10 | [x] | `checks.<sys>.ui-login` | Headless Chromium logs into the real UI and must stay logged in (no 401s) |
 | T11 | [x] | `checks.<sys>.storage-manager` | Real VM + gateway + UI in a browser: lists disks/volumes, creates storage on a blank disk (UI, then API for JBOD-extend), refuses changes to an existing one, needs a real access token |
 | T12 | [x] | `checks.<sys>.service-auth` | NixOS VM test: service-to-service trust boundary (loopback is not an identity) + UI power-off reaches systemd |
-| T13 | [x] | `checks.<sys>.smb-shares` | NixOS VM test: Samba with Nix-owned smb.conf, share accounts via the API, real smbclient: owner in, others/guests/wrong password out; fragment regenerated; survives a reboot |
+| T13 | [x] | `checks.<sys>.smb-shares` | NixOS VM test: Samba with Nix-owned smb.conf, share accounts via the API, real smbclient: owner in, others/guests/wrong password out; fragment regenerated; survives a reboot; discovery (wsdd, mDNS `_smb._tcp`); Time Machine share (`_adisk._tcp`) |
 | T14 | [x] | `checks.<sys>.smb-ui` | Headless Chromium: Files → Shared → Share accounts → add; right-click a folder → Share → only that account; API, ownership and smbclient agree |
 
 ### T1 — Component unit tests

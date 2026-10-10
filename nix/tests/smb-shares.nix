@@ -2,8 +2,9 @@
 # service publishes in include-only mode; shares are restricted to separate SMB accounts created
 # through the API. Asserted with a real smbd and smbclient: the account gets in and owns what it writes,
 # other accounts, guests and wrong passwords do not; system accounts cannot be enrolled; the fragment
-# is regenerated from the share database; accounts and their passwords survive a reboot.
-# Upstream: ReCasaOS#153, #154 (merged).
+# is regenerated from the share database; accounts and their passwords survive a reboot; discovery
+# (wsdd, mDNS) and Time Machine shares (`_adisk._tcp` from smbd itself).
+# Upstream: ReCasaOS#153, #154 (merged), #159 (Time Machine).
 { pkgs, modules }:
 pkgs.testers.runNixOSTest {
   name = "recasanix-smb-shares";
@@ -19,6 +20,7 @@ pkgs.testers.runNixOSTest {
     recasanix.state.enable = true;
     recasanix.appliance.admin.initialHashedPassword = "!";
     virtualisation.memorySize = 2048;
+    environment.systemPackages = [ pkgs.avahi ]; # avahi-browse
   };
 
   testScript = ''
@@ -115,7 +117,31 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("grep -q 'valid users = alice' /etc/samba/smb.casa.conf", timeout=60)
         status, out = smb("alice%alice-pass-1", "ls")
         assert status == 0 and "hello.txt" in out, out
-        log_in()  # sessions do not survive a restart
+        log_in()  # fresh token (the old one stays valid: signing key persists, UserService#21)
+
+    def section(name):
+        return machine.succeed(f"awk '/^\\[/{{p = ($0 == \"[{name}]\")}} p' /etc/samba/smb.casa.conf")
+
+    with subtest("discovery: WS-Discovery (Windows) and mDNS _smb._tcp (Finder)"):
+        machine.wait_for_unit("samba-wsdd.service")
+        # wsdd's HTTP endpoint binds to the LAN interface's address, not loopback
+        machine.wait_until_succeeds("ss -ltnH | grep -q ':5357 '", timeout=60)
+        machine.wait_until_succeeds("avahi-browse -tpr _smb._tcp | grep -q '^=.*;445;'", timeout=60)
+
+    with subtest("a Time Machine share, advertised by smbd itself"):
+        machine.succeed("mkdir -p /DATA/Backups")
+        ok("POST", "/v1/samba/shares", [{"path": "/DATA/Backups", "username": "bob", "time_machine": True}])
+        assert "fruit:time machine = yes" in section("Backups"), section("Backups")
+        assert "fruit" not in section("Media"), section("Media")
+        backups = [x for x in ok("GET", "/v1/samba/shares")["data"] if x["path"] == "/DATA/Backups"][0]
+        assert backups["time_machine"], backups
+        machine.wait_until_succeeds("avahi-browse -tpr _adisk._tcp | grep -q 'adVN=Backups'", timeout=60)
+        status, out = smb("bob%bob-pass-1", "ls", share="Backups")
+        assert status == 0, out
+        # an account-only update (time_machine absent) keeps the flag
+        ok("PUT", f"/v1/samba/shares/{backups['id']}", {"username": "bob"})
+        assert "fruit:time machine = yes" in section("Backups"), section("Backups")
+        ok("DELETE", f"/v1/samba/shares/{backups['id']}")
 
     with subtest("lifting the restriction and removing the share return the directory to root"):
         share_id = ok("GET", "/v1/samba/shares")["data"][0]["id"]

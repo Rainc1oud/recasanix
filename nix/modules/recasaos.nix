@@ -530,6 +530,10 @@ in
         services = {
           samba = {
             enable = true;
+            # mDNS (avahi) built in: smbd announces _smb._tcp (Finder) and every Time Machine share as
+            # _adisk._tcp itself — shares are hot state, so no static avahi service file could list them.
+            # Not `sambaFull`: that adds the AD DC, CUPS, LDAP, Ceph. Cost: built locally (not cached).
+            package = pkgs.samba.override { enableMDNS = true; };
             # SMB2+ only: no NetBIOS name service. Discovery is WS-Discovery (Windows) and mDNS (below).
             nmbd.enable = false;
             settings.global = {
@@ -563,7 +567,12 @@ in
           };
         };
         # the root service restarts Samba as `systemctl restart smbd` (helper.sh RestartSMBD)
-        systemd.services.samba-smbd.aliases = [ "smbd.service" ];
+        systemd.services.samba-smbd = {
+          aliases = [ "smbd.service" ];
+          # the root service restarts smbd on every share change: a few quick edits hit the default
+          # start limit (5/10 s) and left Samba down (found by T13). No Restart= on this unit → no crash loop.
+          unitConfig.StartLimitIntervalSec = 0;
+        };
       })
     ]
   );
