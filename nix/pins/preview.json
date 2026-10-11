@@ -8,7 +8,7 @@
         "fix/startup-and-guest-fallback"
       ],
       "base": "eba7a313f4156d31f23fe9ba0e05e1c25527b937",
-      "head": "7ad198b50705b423a82a86b05e1541ab73ebd6db"
+      "head": "eb963c2b3a59734328c830ad8306b9211923dde9"
     },
     "recasaos-message-bus": {
       "upstream": "EdmundFu-233/ReCasaOS-MessageBus",
@@ -22,7 +22,7 @@
         "fix/accept-bearer-authorization"
       ],
       "base": "f6666910c8c634c7529c2c47bcb1edc6df4ca92d",
-      "head": "fac9b4fd3b3ad5d5f67cf1b3329d4ad1163ee000"
+      "head": "9fa90125e316b515e6817351f284643b8de087da"
     },
     "recasaos-app-management": {
       "upstream": "EdmundFu-233/ReCasaOS-AppManagement",
@@ -33,7 +33,7 @@
         "fix/loopback-needs-service-credential"
       ],
       "base": "6fe9af7111653d041d65460b19b61f1cdf7f0673",
-      "head": "3d611e4c8f809410a09100707d79b0f30f8ec8b5"
+      "head": "0d4f23bc06bdac9839639b3ff52112feab6bbe79"
     },
     "recasaos-user-service": {
       "upstream": "EdmundFu-233/ReCasaOS-UserService",
@@ -44,7 +44,7 @@
         "feat/persistent-signing-key"
       ],
       "base": "f25e495df180238e7937104f79a6e55b97bcd208",
-      "head": "9d1750169af0055fae8cdb9fe32515904d72d8f9"
+      "head": "75f9d05afa860cc7bef9cc57ea36f0a15f4747a5"
     },
     "casaos-ui": {
       "upstream": "EdmundFu-233/ReCasaOS-UI",
@@ -61,7 +61,7 @@
         "fix/app-grid-survives-failure"
       ],
       "base": "0d6cf15eae7c94aa097b8940f947b149ce844ed7",
-      "head": "f72151ad1b8b6c3dcec722a12cf5a52a641537b7"
+      "head": "a6e23c54bd5eded710c192ba390ce81b45b34615"
     }
   }
 }

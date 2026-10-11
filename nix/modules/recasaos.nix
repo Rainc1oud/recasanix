@@ -566,11 +566,12 @@ in
             };
           };
         };
-        # the root service restarts Samba as `systemctl restart smbd` (helper.sh RestartSMBD)
+        # share edits: `smbcontrol smbd reload-config` + `close-share` of the edited shares (ReCasaOS#159);
+        # restart (`systemctl restart smbd`, helper.sh RestartSMBD) at startup reconcile and as fallback
         systemd.services.samba-smbd = {
           aliases = [ "smbd.service" ];
-          # the root service restarts smbd on every share change: a few quick edits hit the default
-          # start limit (5/10 s) and left Samba down (found by T13). No Restart= on this unit → no crash loop.
+          # restarts in quick succession (fallback, older pins) hit the default start limit (5/10 s)
+          # and left Samba down (found by T13). No Restart= on this unit → no crash loop.
           unitConfig.StartLimitIntervalSec = 0;
         };
       })

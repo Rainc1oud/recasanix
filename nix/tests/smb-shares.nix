@@ -3,8 +3,9 @@
 # through the API. Asserted with a real smbd and smbclient: the account gets in and owns what it writes,
 # other accounts, guests and wrong passwords do not; system accounts cannot be enrolled; the fragment
 # is regenerated from the share database; accounts and their passwords survive a reboot; discovery
-# (wsdd, mDNS) and Time Machine shares (`_adisk._tcp` from smbd itself).
-# Upstream: ReCasaOS#153, #154 (merged), #159 (Time Machine).
+# (wsdd, mDNS) and Time Machine shares (`_adisk._tcp` from smbd itself); share edits reload smbd
+# (no restart: other sessions stay) and close only the edited share's sessions.
+# Upstream: ReCasaOS#153, #154 (merged), #159 (Time Machine, reload).
 { pkgs, modules }:
 pkgs.testers.runNixOSTest {
   name = "recasanix-smb-shares";
@@ -142,6 +143,31 @@ pkgs.testers.runNixOSTest {
         ok("PUT", f"/v1/samba/shares/{backups['id']}", {"username": "bob"})
         assert "fruit:time machine = yes" in section("Backups"), section("Backups")
         ok("DELETE", f"/v1/samba/shares/{backups['id']}")
+
+    with subtest("share edits reload smbd: other sessions stay, the edited share's are closed"):
+        smbd_pid = machine.succeed("systemctl show -P MainPID samba-smbd").strip()
+        # an open alice session on Media (smbclient idles on stdin)
+        machine.succeed("systemd-run -E PATH --unit=smb-hold sh -c 'sleep 600 | smbclient //localhost/Media -U alice%alice-pass-1 -m SMB3'")
+        machine.wait_until_succeeds("smbstatus -S | grep -q '^Media '", timeout=30)
+        machine.succeed("mkdir -p /DATA/Docs")
+        ok("POST", "/v1/samba/shares", [{"path": "/DATA/Docs"}])
+        docs = [x for x in ok("GET", "/v1/samba/shares")["data"] if x["path"] == "/DATA/Docs"][0]
+        status, out = smb("bob%bob-pass-1", "ls", share="Docs")  # served after the reload
+        assert status == 0, out
+        assert machine.succeed("systemctl show -P MainPID samba-smbd").strip() == smbd_pid, "smbd restarted"
+        machine.succeed("smbstatus -S | grep -q '^Media '")  # untouched share: session kept
+        # narrowing Media to bob: alice's open session goes at once
+        media = [x for x in ok("GET", "/v1/samba/shares")["data"] if x["path"] == "/DATA/Media"][0]
+        ok("PUT", f"/v1/samba/shares/{media['id']}", {"username": "bob"})
+        machine.wait_until_fails("smbstatus -S | grep -q '^Media '", timeout=30)
+        assert machine.succeed("systemctl show -P MainPID samba-smbd").strip() == smbd_pid, "smbd restarted"
+        status, out = smb("alice%alice-pass-1", "ls")
+        assert status != 0, f"alice still in: {out}"
+        status, out = smb("bob%bob-pass-1", "ls")
+        assert status == 0, out
+        machine.succeed("systemctl stop smb-hold")
+        ok("DELETE", f"/v1/samba/shares/{docs['id']}")
+        ok("PUT", f"/v1/samba/shares/{media['id']}", {"username": "alice"})
 
     with subtest("lifting the restriction and removing the share return the directory to root"):
         share_id = ok("GET", "/v1/samba/shares")["data"][0]["id"]

@@ -638,7 +638,7 @@ lose nothing on this filesystem**, and T4 proves it by deleting the root disk be
 | `/var/log/journal` | hot | `state/journal` (bind mount) | **log of record**: the services tee every log line to stdout → journal. Capped in `appliance.nix` (200M). Survives image updates (T4). |
 | `/var/log/casaos` | volatile | root filesystem | duplicate of the journal (upstream lumberjack files: 10 MB × 60, 1 day). Lost on an image update — by design. |
 | `/etc/machine-id` | hot | `state/machine-id` | restored by activation before systemd reads it; created on first boot. One identity per device: journal directory, DHCP client id. T4 asserts it across root replacement. |
-| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | Nix (`smb.conf`), root service (fragment) | Nix-owned `smb.conf` with `include = /etc/samba/smb.casa.conf`; root service in include-only mode writes the fragment, validates with `testparm`, restarts smbd (start limit lifted). Share-account passdb: `/var/lib/samba` → `state/samba` (bind mount). T13/T14. |
+| `/etc/samba/smb.conf` (baseline) + `smb.casa.conf` (generated) | baseline cold, generated hot | Nix (`smb.conf`), root service (fragment) | Nix-owned `smb.conf` with `include = /etc/samba/smb.casa.conf`; root service in include-only mode writes the fragment, validates with `testparm`, reloads smbd + closes the edited shares' sessions (restart only for Time Machine set changes / fallback; start limit lifted, ReCasaOS#159). Share-account passdb: `/var/lib/samba` → `state/samba` (bind mount). T13/T14. |
 | Docker daemon config, Docker root | cold | Nix (task 3.3) | the API that rewrote `daemon.json` is not routed (see the register). |
 | Data pool `/var/lib/recasanix/data`, `/DATA` | hot | the pool | created and mounted at runtime; unrelated to the state filesystem. |
 
@@ -849,7 +849,7 @@ GitLab CI later). All of these must run without hardware.
 | T10 | [x] | `checks.<sys>.ui-login` | Headless Chromium logs into the real UI and must stay logged in (no 401s) |
 | T11 | [x] | `checks.<sys>.storage-manager` | Real VM + gateway + UI in a browser: lists disks/volumes, creates storage on a blank disk (UI, then API for JBOD-extend), refuses changes to an existing one, needs a real access token |
 | T12 | [x] | `checks.<sys>.service-auth` | NixOS VM test: service-to-service trust boundary (loopback is not an identity) + UI power-off reaches systemd |
-| T13 | [x] | `checks.<sys>.smb-shares` | NixOS VM test: Samba with Nix-owned smb.conf, share accounts via the API, real smbclient: owner in, others/guests/wrong password out; fragment regenerated; survives a reboot; discovery (wsdd, mDNS `_smb._tcp`); Time Machine share (`_adisk._tcp`) |
+| T13 | [x] | `checks.<sys>.smb-shares` | NixOS VM test: Samba with Nix-owned smb.conf, share accounts via the API, real smbclient: owner in, others/guests/wrong password out; fragment regenerated; survives a reboot; discovery (wsdd, mDNS `_smb._tcp`); Time Machine share (`_adisk._tcp`); share edits reload smbd (PID kept, other sessions kept, edited share's sessions closed) |
 | T14 | [x] | `checks.<sys>.smb-ui` | Headless Chromium: Files → Shared → Share accounts → add; right-click a folder → Share → only that account; API, ownership and smbclient agree |
 
 ### T1 — Component unit tests
@@ -1061,6 +1061,8 @@ shell and never touch system accounts (root cannot be enrolled); a share restric
 that account in and gives it the files, refuses other accounts, guests and wrong passwords; an account in
 use cannot be deleted; deleting the fragment and restarting the root service restores it; accounts and
 passwords survive a reboot; re-assigning or removing the share hands the directory over / back to root.
+Share edits reload smbd instead of restarting it: an unrelated edit keeps smbd's PID and an open session
+on another share; narrowing a share closes that share's open sessions at once (ReCasaOS#159).
 Upstream: ReCasaOS#153, #154 (merged). Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
 T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard (PRs ReCasaOS-UI#8, ReCasaOS-UI#9). It needs
 a data pool: without Docker, app management answers the app grid with 500 and the upstream dashboard drops

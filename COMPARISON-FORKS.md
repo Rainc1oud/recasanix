@@ -174,4 +174,4 @@ Branches in forks `ppenguin/<repo>-EF` (clones `~/devel/github.com/ppenguin/ReCa
 ### Batching (owner, 2026-10-10)
 - fewer PRs: one per repo/theme, one commit per concern, items tabled in the description
 - wallpaper/avatar `?token=`: not a UI fix — EF answers the legacy image routes with 410, replacement = EF UserService#4 (object-bound media) → parity item (custom avatar/wallpaper)
-- follow-up (not filed): smbd *reload* instead of restart on share edits (no dropped sessions, e.g. a running Time Machine backup) — needs closing sessions on shares whose access was narrowed; until then: smbd start limit lifted in Nix
+- smbd reload instead of restart on share edits: ReCasaOS#159 (4th commit) — reload + `close-share` of changed shares; restart only for main config / Time Machine set changes (mDNS registration at start); smbd start limit stays lifted in Nix (fallback restarts)
