@@ -98,6 +98,18 @@ pkgs.testers.runNixOSTest {
         code = api(method, path)
         assert code in ("404", "405"), f"{method} {path} -> {code}"
 
+    # the file API stays in the data roots (`[file] ManagementRoots`): no /etc, no state partition
+    for path in ["/etc/shadow", "/var/lib/casaos/db", "/DATA/../etc/passwd"]:
+        code = machine.succeed(
+            f"curl -s -o /dev/null -w '%{{http_code}}' -G -H 'Authorization: {token}' "
+            f"--data-urlencode 'path={path}' http://localhost/v1/folder"
+        )
+        assert code == "403", f"list {path} -> {code}"
+    code = machine.succeed(f"curl -s -o /dev/null -w '%{{http_code}}' -G -H 'Authorization: {token}' --data-urlencode 'path=/DATA' http://localhost/v1/folder")
+    assert code == "200", f"list /DATA -> {code}"
+    root = json.loads(machine.succeed(f"curl -s -G -H 'Authorization: {token}' --data-urlencode 'path=/' http://localhost/v1/folder"))
+    assert [e["name"] for e in root["data"]["content"]] == ["DATA"], root
+
     # anonymous statistics stay off (vendor-owned marker, folded into the core's state at start)
     telemetry = json.loads(machine.succeed(f"curl -s -H 'Authorization: {token}' http://localhost/v1/sys/telemetry"))
     assert telemetry["data"]["enabled"] is False, telemetry

@@ -177,6 +177,13 @@ rec {
         caller = "n/a";
       }
       {
+        path = "route/v1/file.go, route/v2/file.go, route/v2.go: file API paths";
+        kind = "pr";
+        why = "Not host management — confinement: the core runs as root and its file API took any path, so a signed-in (or hijacked) session could read, write and delete anything: /etc, SSH host keys, Samba passdb, the user database on the state partition.";
+        replacedBy = "`[file] ManagementRoots` = services.recasaos.fileRoots (set by recasanix-state-init): pkg/fileroots, the boundary of EF's pkg/filesecurity ported (openat2 RESOLVE_BENEATH, roots pinned, fail closed); `/` lists only the way down. Branch feat/file-roots (ppenguin/CasaOS-RCOS), in staging; issue ReCasaOS/CasaOS#48. Stage 2 (descriptor-relative operations) not ported.";
+        caller = "n/a — asserted by recasaos-boot (T2): /etc, /var/lib/casaos and `..` refused, /DATA allowed, `/` lists only DATA";
+      }
+      {
         path = "route/*.go (all services): Authorization token lookup";
         kind = "pr";
         why = "Not host management — interoperability: every service took the whole Authorization value as the JWT, so the standard `Bearer <token>` (RFC 6750; OpenAPI `bearer`, curl `--oauth2-bearer`) was a 401. Bare token = CasaOS heritage, kept (owner decision 2026-10-23: tolerant reader, no breaking change).";

@@ -92,6 +92,8 @@ in
         "TestPorts"
         # OS upgrade and Docker package update (host management, absent here, see excludePackages):
         # runbook/driver scripts expect /bin/mv, rm, apt, dpkg in a Debian layout
+        # the OS-upgrade button matrix: minutes under the load of a full `nix flake check` → T1 timeout
+        "^TestEveryButtonThatIsOfferedWorksAndEveryOneThatIsNotIsRefused$"
         "^TestACheckThatBlock8StoppedIsMadeAgainThroughTheCoreAndTheDriver$"
         "^TestAHopThroughTheCoreTheDriverAndTheRealBlocksFromTheStartToTheClosing$"
         "^TestARehearsalThroughTheCoreTheDriverAndTheRealBlocks$"

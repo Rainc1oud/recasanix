@@ -103,6 +103,8 @@ let
         if cfg.smb.enable then "external" else "managed"
       }
       crudini --set "$config/casaos.conf" server ImageManaged true
+      # the file API stays in the data roots (it runs as root): no /etc, no state partition
+      crudini --set "$config/casaos.conf" file ManagementRoots ${lib.concatStringsSep "," cfg.fileRoots}
       chmod 0600 "$config/casaos.conf"
       crudini --set "$config/user-service.conf" app FirstAdmin local
       chmod 0600 "$config/user-service.conf"

@@ -17,7 +17,8 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 - per-module split (EF + ORG mix): rejected — shared contracts (auth scheme, Common, bus events, UI↔API)
 - trial: whole base on ORG, our changes as PR branches in `ppenguin/*-RCOS`, consumed via `recasanix-staging`
 - of 27 EF PRs: 18 obsolete on ORG (already there or ORG-origin); ported: below
-- lost vs EF: public-files portal (EF-only), file-root pinning env (ORG confines shares to fixed roots), chosen-password reset (ORG `-ru` = random password)
+- lost vs EF: public-files portal (EF-only, not used), chosen-password reset (ORG `-ru` = random password)
+- file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, branch `feat/file-roots`, ReCasaOS/CasaOS#48)
 
 ### PR branches (ORG, not opened yet)
 
