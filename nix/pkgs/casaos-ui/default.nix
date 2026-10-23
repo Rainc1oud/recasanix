@@ -20,8 +20,9 @@ stdenv.mkDerivation (finalAttrs: {
   version = "0-unstable-${builtins.substring 0 7 components.casaos-ui.rev}";
   inherit src;
 
-  # No local patch: update/package/module rows follow the core (`[server] ImageManaged`, upstream PR
-  # in our staging); the build environment is no longer stringified into the bundle upstream.
+  # Update/package/module rows follow the core (`[server] ImageManaged`, upstream PR in our staging).
+  # Local patch (docs/upstream-exclusions.md): git-deployed apps hidden (owner decision 2026-10-23).
+  patches = [ ./patches/0001-hide-git-apps.patch ];
 
   nativeBuildInputs = [
     nodejs_22

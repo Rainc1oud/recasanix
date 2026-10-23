@@ -1,0 +1,15 @@
+diff --git a/src/components/Apps/AppSection.vue b/src/components/Apps/AppSection.vue
+index bee5311f..3a696b55 100644
+--- a/src/components/Apps/AppSection.vue
++++ b/src/components/Apps/AppSection.vue
+@@ -18,9 +18,7 @@
+ 				<b-dropdown-item aria-role="menuitem" @click="showInstall(0, 'custom')">
+ 					{{ $t('Custom Install APP') }}
+ 				</b-dropdown-item>
+-				<b-dropdown-item aria-role="menuitem" @click="showGitApp">
+-					{{ $t('From a git repository…') }}
+-				</b-dropdown-item>
++				<!-- ReCasaNix: git-deployed apps hidden (docs/upstream-exclusions.md) -->
+ 				<b-dropdown-item aria-role="menuitem" @click="showExternalLinkPanel">
+ 					{{ $t('Add external link/APP') }}
+ 				</b-dropdown-item>

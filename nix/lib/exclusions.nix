@@ -108,8 +108,8 @@ rec {
           path = "route/v2.go: git-deployed apps (/v2/app_management/git/*, webhook)";
           kind = "finding";
           why = "Apps built from a git repository on the box: host `git` and `docker build`, plus a webhook route that skips the JWT (HMAC-signed by the app's secret).";
-          replacedBy = "Nothing yet: `git` is not on the unit's PATH, so a git app fails to clone; the webhook is reachable but has nothing to build.";
-          caller = "TODO — decide with the app story (keep: add git + review webhook; drop: hide in UI)";
+          replacedBy = "Nothing: hidden for now (owner decision 2026-10-23). `git` is not on the unit's PATH, so a git app created through the API alone fails to clone; the webhook has no app to build.";
+          caller = "yes — the dashboard's only entry ('From a git repository…' in the app menu) is removed: casaos-ui patches/0001-hide-git-apps.patch. Routes stay (no app exists to reach them)";
         }
       ];
     casaos = perService { name = "casaos"; } ++ [
@@ -213,6 +213,13 @@ rec {
       }
     ];
     casaos-ui = [
+      {
+        path = "src/components/Apps/AppSection.vue: 'From a git repository…'";
+        kind = "patch";
+        why = "Entry to git-deployed apps (clone + build on the box, webhook-triggered redeploys): not offered on the appliance for now.";
+        replacedBy = "Nothing (owner decision 2026-10-23); see the app-management entry.";
+        caller = "yes — menu item removed: patches/0001-hide-git-apps.patch";
+      }
       {
         path = "src/components/TopBar.vue: update row, System packages row; src/views/Welcome.vue";
         kind = "pr";

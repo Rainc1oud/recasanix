@@ -1090,7 +1090,7 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
 | R.6 | [x] | `nix flake check` green on the org base (T1–T14; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [ ] | open the org PRs (after owner go; ReCasaOS/CasaOS#11) |
+| R.7 | [~] | org PRs: MessageBus#4, UI#53, CasaOS#42, Common#6, Common#7, UserService#4; switch issues CasaOS#43–#45, Bearer #46; switch PRs after agreement |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 
