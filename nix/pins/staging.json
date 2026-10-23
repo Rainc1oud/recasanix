@@ -1,0 +1,76 @@
+{
+  "branch": "recasanix-staging",
+  "components": {
+    "recasaos": {
+      "upstream": "ReCasaOS/CasaOS",
+      "fork": "ppenguin/CasaOS-RCOS",
+      "prs": [
+        "fix/samba-reload",
+        "feat/nixos-host",
+        "feat/bearer-authorization"
+      ],
+      "base": "c0404d8d8f3ef2b60e978274df88d09669f12512",
+      "head": "8c10365c54d08a5f7b7c8c8712d07798949e6d53"
+    },
+    "casaos-common": {
+      "upstream": "ReCasaOS/CasaOS-Common",
+      "fork": "ppenguin/CasaOS-Common-RCOS",
+      "prs": [
+        "fix/bash-from-path",
+        "feat/bearer-authorization"
+      ],
+      "base": "30f47536a9c42e8f5ad240f696748e13ff2e8063",
+      "head": "c719b673ebbbfd38bf35f293a345b6b64440f6b0"
+    },
+    "recasaos-message-bus": {
+      "upstream": "ReCasaOS/CasaOS-MessageBus",
+      "fork": "ppenguin/CasaOS-MessageBus-RCOS",
+      "prs": [
+        "fix/subscriptions-before-start",
+        "feat/bearer-authorization"
+      ],
+      "base": "5249d6443ae55bc6d4e9ccb5f88a49ffddabee1e",
+      "head": "707280122e831d866cdac3b6a035424b98ccc91a"
+    },
+    "recasaos-user-service": {
+      "upstream": "ReCasaOS/CasaOS-UserService",
+      "fork": "ppenguin/CasaOS-UserService-RCOS",
+      "prs": [
+        "feat/local-first-admin",
+        "feat/bearer-authorization"
+      ],
+      "base": "576c2a05365f24b55f117c65dc901f118d719809",
+      "head": "332b817a517c04a2757ce533662860a552611f74"
+    },
+    "casaos-ui": {
+      "upstream": "ReCasaOS/CasaOS-UI",
+      "fork": "ppenguin/CasaOS-UI-RCOS",
+      "prs": [
+        "fix/storage-finally-app-grid",
+        "feat/image-managed-host"
+      ],
+      "base": "fb3179cfede5d0f5c8d1764178143370b99c9d6b",
+      "head": "a079a3c533c65d9a4d42308e2a83467700038d75"
+    },
+    "recasaos-gateway": {
+      "upstream": "ReCasaOS/CasaOS-Gateway",
+      "fork": "ppenguin/CasaOS-Gateway-RCOS",
+      "prs": [
+        "feat/bearer-authorization"
+      ],
+      "base": "5434b2121d1940c76b1386befbd2039ab63b31c4",
+      "head": "9b99470267abfed7bc604cb9df9713ab911b22fe"
+    },
+    "recasaos-app-management": {
+      "upstream": "ReCasaOS/CasaOS-AppManagement",
+      "fork": "ppenguin/CasaOS-AppManagement-RCOS",
+      "prs": [
+        "feat/bearer-authorization"
+      ],
+      "base": "095cc63e6f6f5a965315f4270e6c24854767cf28",
+      "head": "96a3409097b7243d72d2982a5f0bacb71a29224c"
+    }
+  },
+  "install": "53674be97f87639672fc5307dac09609a99940c1",
+  "common_version": "v0.4.30"
+}

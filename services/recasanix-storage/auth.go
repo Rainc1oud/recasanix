@@ -23,8 +23,9 @@ import (
 // Authentication follows the rules of the ReCasaOS root service (route/v1.go), so a user's token
 // works here exactly where it works there, and nothing else does:
 //
-//   - `Authorization: Bearer <token>` only. A token in the query string leaks into logs, history and
-//     referers, and is never accepted.
+//   - the token in `Authorization`, bare (as the ReCasaOS services and the dashboard send it) or as
+//     `Bearer <token>`. A token in the query string leaks into logs, history and referers, and is
+//     never accepted.
 //   - an ES256 JWT, verified against the key the user service publishes (JWKS). Other algorithms,
 //     including "none" and HMAC with the public key as the secret, are refused before any key is used.
 //   - it must expire, and the issuer must be the access-token issuer: a refresh token is not an access
@@ -62,12 +63,7 @@ type accessClaims struct {
 // Authenticate reports whether the request carries a valid access token. Every failure is the same
 // error: the caller must not be able to tell a bad signature from an expired token.
 func (a *Authenticator) Authenticate(r *http.Request) error {
-	const prefix = "Bearer "
-	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, prefix) {
-		return errUnauthorized
-	}
-	raw := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	raw := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if raw == "" {
 		return errUnauthorized
 	}

@@ -10,34 +10,44 @@
     git-hooks.url = "github:cachix/git-hooks.nix";
     git-hooks.inputs.nixpkgs.follows = "nixpkgs";
 
-    # ReCasaOS components, plain (non-flake) inputs. Unpinned URLs; revs live in flake.lock and only
-    # nix/pins/update.sh moves them (never a bare `nix flake update`: T7 fails).
-    # - component with open upstream PRs: our fork's `recasanix-preview` = upstream pin + PRs merged
-    #   (nix/pins/preview.json) → post-merge preview through the normal source mechanism
-    # - other components: upstream, at the rev of the root's release/components.lock.json
+    # ReCasaOS (org, github.com/ReCasaOS) components, plain (non-flake) inputs. Unpinned URLs; revs
+    # live in flake.lock and only nix/pins/update.sh moves them (never a bare `nix flake update`: T7 fails).
+    # - pin of record: CasaOS-Install release/components.env (tag + commit per component)
+    # - component with open upstream PRs: our fork's `recasanix-staging` = pin + PRs merged
+    #   (nix/pins/staging.json) → post-merge preview through the normal source mechanism
+    # - other components: upstream, at the commit of components.env
+    recasaos-install = {
+      url = "github:ReCasaOS/CasaOS-Install";
+      flake = false;
+    };
     recasaos = {
-      url = "github:ppenguin/ReCasaOS-EF/recasanix-preview";
+      url = "github:ppenguin/CasaOS-RCOS/recasanix-staging";
+      flake = false;
+    };
+    # Go dependency of every service (go.mod), carried as a source while our fixes are unreleased
+    casaos-common = {
+      url = "github:ppenguin/CasaOS-Common-RCOS/recasanix-staging";
       flake = false;
     };
     recasaos-gateway = {
-      url = "github:EdmundFu-233/ReCasaOS-Gateway";
+      url = "github:ppenguin/CasaOS-Gateway-RCOS/recasanix-staging";
       flake = false;
     };
     recasaos-user-service = {
-      url = "github:ppenguin/ReCasaOS-UserService-EF/recasanix-preview";
+      url = "github:ppenguin/CasaOS-UserService-RCOS/recasanix-staging";
       flake = false;
     };
     recasaos-app-management = {
-      url = "github:ppenguin/ReCasaOS-AppManagement-EF/recasanix-preview";
+      url = "github:ppenguin/CasaOS-AppManagement-RCOS/recasanix-staging";
       flake = false;
     };
     recasaos-message-bus = {
-      url = "github:ppenguin/ReCasaOS-MessageBus-EF/recasanix-preview";
+      url = "github:ppenguin/CasaOS-MessageBus-RCOS/recasanix-staging";
       flake = false;
     };
-    # UI: ReCasaOS-UI, maintained fork of IceWhaleTech/CasaOS-UI (AGENTS.md §2)
+    # UI: ReCasaOS/CasaOS-UI, the Vue 3 dashboard (AGENTS.md §2)
     casaos-ui = {
-      url = "github:ppenguin/ReCasaOS-UI-EF/recasanix-preview";
+      url = "github:ppenguin/CasaOS-UI-RCOS/recasanix-staging";
       flake = false;
     };
   };

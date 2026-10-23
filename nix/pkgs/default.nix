@@ -3,7 +3,7 @@
 final: _prev:
 let
   inherit (final) callPackage;
-  mkCasaosGo = callPackage ./mk-casaos-go.nix { inherit exclusions; };
+  mkCasaosGo = callPackage ./mk-casaos-go.nix { inherit exclusions components; };
   goService =
     path: name:
     callPackage path {

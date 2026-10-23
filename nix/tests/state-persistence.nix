@@ -75,7 +75,6 @@ pkgs.testers.runNixOSTest {
         # the services' hardened storage code refuses symlinks, so these are bind mounts of state directories
         for path, src in [("/etc/casaos", "casaos-etc"), ("/var/lib/casaos", "casaos")]:
             machine.succeed(f"findmnt -n -o SOURCE --target {path} | grep -q '\\[/{src}\\]'")
-        machine.succeed("test -e /var/lib/recasanix/state/casaos-etc/recasaos-user-bootstrap.seal")
         # vendor-owned: tamper with it, and with the executed start.d directory
         machine.succeed("rm -rf /var/lib/casaos/www && mkdir /var/lib/casaos/www && echo tampered > /var/lib/casaos/www/index.html")
         machine.succeed("echo 'touch /tmp/pwned' > /etc/casaos/start.d/evil.sh")
@@ -93,10 +92,12 @@ pkgs.testers.runNixOSTest {
         replace_root_and_reboot()
         up()
         machine.succeed("findmnt -M /var/lib/recasanix/state -t ext4")
-        # ReCasaOS: the database (admin account) and the bootstrap seal came back — login works, no re-bootstrap
+        # ReCasaOS: the database (admin account) came back — login works, and a second bootstrap is refused
         machine.succeed("curl -s http://localhost/v1/users/status | grep -q '\"initialized\":true'")
-        # the session from before the update is still valid: the signing key is hot state (PR ReCasaOS-UserService)
-        machine.succeed(f"curl -fsS -H 'Authorization: Bearer {token}' http://localhost/v1/users/current")
+        machine.fail("printf 'evil\\nrecasanix-evil-pass-1\\n' | recasanix-user-admin bootstrap")
+        machine.wait_for_unit("casaos-user-service.service")
+        # the session from before the update is still valid: the signing key is hot state
+        machine.succeed(f"curl -fsS -H 'Authorization: {token}' http://localhost/v1/users/current")
         token = login()
         # the runtime-created unix user, with the same uid
         assert machine.succeed("id -u alice").strip() == uid

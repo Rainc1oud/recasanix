@@ -135,16 +135,16 @@ mistake (T11 checks the pool's UUID is unchanged after such an attempt).
 
 ## Security
 
-- **Same rules as the ReCasaOS root service**: `Authorization: Bearer <ES256 JWT>` only (never a query
-  string), verified against the key the user service publishes as JWKS; the token must expire and the issuer
+- **Same rules as the ReCasaOS root service**: the ES256 JWT in `Authorization`, bare (as the dashboard
+  sends it) or `Bearer <token>` (never a query string), verified against the key the user service publishes as JWKS; the token must expire and the issuer
   must be `casaos` (a **refresh token is refused**); no other algorithm. **No loopback exemption**: it
   listens on loopback, but any local process can reach that, and "from localhost" is not an identity.
   Failing to get the key fails closed. All failures give one identical 401.
 - **Every argument to every command is either a fixed literal or the one disk path the eligibility check
   already approved.** There is no user-chosen label, mount point or option string anywhere in the command
   lines above — see "Creating storage".
-- **Gateway registration** uses the gateway's per-boot service token (`gateway.token`, owner-only), read
-  again on every call, and only ever sent to a loopback management address; redirects are not followed.
+- **Gateway registration** uses the gateway's per-boot internal secret (`internal.secret`, owner-only,
+  sent as `Authorization: Internal <secret>`), read again on every call, and only ever sent to a loopback management address; redirects are not followed.
   Service-owned routes are not persisted and do not expire, so the service checks every 30 s and registers
   again if the gateway restarted and forgot them (T11 restarts the gateway to prove it).
 - **The unit** runs as root (the token file is owner-only, and formatting a disk needs raw access) with

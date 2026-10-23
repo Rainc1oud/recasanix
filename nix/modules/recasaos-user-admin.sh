@@ -1,49 +1,50 @@
 # recasanix-user-admin — local, root-only account lifecycle for ReCasaOS.
 #
-# The fork never accepts an administrator setup secret over HTTP (POST /v1/users/register answers
-# 410 Gone), so the first administrator, and any password reset, is a local operation: credentials are
-# handed to a oneshot unit through systemd's LoadCredential from root-only files, never through
-# arguments, environment, journal or shell history. This script drives that documented lifecycle:
-# stop the daemon, run the oneshot, verify the credential files are gone, start the daemon again.
+# The first administrator is never created over HTTP (`[app] FirstAdmin = local`: no register key,
+# POST /v1/users/register → 403), so bootstrap is a local operation: credentials are handed to a
+# oneshot unit through systemd's LoadCredential from root-only files, never through arguments,
+# environment, journal or shell history. A password reset uses upstream's `-ru`: it sets a random
+# password, clears two-factor authentication and prints the new password here (not in the journal).
 set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-Usage: recasanix-user-admin <command>
+Usage: recasanix-user-admin bootstrap
+       recasanix-user-admin reset-password <username>
 
-  bootstrap              create the first administrator (only works once)
-  reset-admin-password   replace an existing administrator's password
-  reset-user-password    replace an existing non-administrator's password
-
-The username and password are read from the terminal (or, when stdin is not a terminal,
-from two lines on stdin). They are never accepted as arguments.
+  bootstrap        create the first administrator (only works once); username and password are
+                   read from the terminal (or two lines on stdin), never accepted as arguments
+  reset-password   give an account a new random password (printed here) and turn off its
+                   two-factor authentication
 USAGE
   exit 2
 }
 
-[ $# -eq 1 ] || usage
-case "$1" in
-  bootstrap)
-    unit=recasaos-user-bootstrap
-    password_file=password
-    ;;
-  reset-admin-password)
-    unit=recasaos-user-password-reset
-    password_file=new-password
-    ;;
-  reset-user-password)
-    unit=recasaos-user-account-password-reset
-    password_file=new-password
-    ;;
-  *) usage ;;
-esac
-
+[ $# -ge 1 ] || usage
 if [ "$(id -u)" -ne 0 ]; then
   exec /run/wrappers/bin/sudo "$0" "$@"
 fi
 
-dir=/run/$unit
 daemon=casaos-user-service.service
+
+case "$1" in
+  bootstrap)
+    [ $# -eq 1 ] || usage
+    ;;
+  reset-password)
+    [ $# -eq 2 ] && [ -n "$2" ] || usage
+    # the account store only; the running service would keep a stale view → stop it meanwhile
+    systemctl stop "$daemon"
+    status=0
+    casaos-user-service -c /etc/casaos/user-service.conf -ru -user "$2" | grep -v '^\(git commit\|build date\):' || status=$?
+    systemctl start "$daemon"
+    exit "$status"
+    ;;
+  *) usage ;;
+esac
+
+unit=recasaos-user-bootstrap
+dir=/run/$unit
 
 if [ -t 0 ]; then
   read -r -p "Username: " username
@@ -65,7 +66,7 @@ fi
 }
 
 cleanup() {
-  rm -f -- "$dir/username" "$dir/$password_file"
+  rm -f -- "$dir/username" "$dir/password"
 }
 trap cleanup EXIT
 
@@ -73,7 +74,7 @@ trap cleanup EXIT
 install -d -m 0700 -o root -g root "$dir"
 umask 077
 printf '%s' "$username" >"$dir/username"
-printf '%s' "$password" >"$dir/$password_file"
+printf '%s' "$password" >"$dir/password"
 unset password again
 
 systemctl stop "$daemon"
@@ -81,7 +82,7 @@ status=0
 systemctl start "$unit.service" || status=$?
 
 # the unit removes the sources itself; make sure, whatever happened
-for f in "$dir/username" "$dir/$password_file"; do
+for f in "$dir/username" "$dir/password"; do
   if [ -e "$f" ]; then
     echo "warning: credential source $f survived the unit; removing it" >&2
     rm -f -- "$f"

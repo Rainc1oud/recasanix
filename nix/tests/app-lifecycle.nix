@@ -99,7 +99,7 @@ pkgs.testers.runNixOSTest {
     def api(method, path, extra="", body=None):
         data = f"--data-binary @{body}" if body else ""
         return machine.succeed(
-            f"curl -s -X {method} -H 'Authorization: Bearer {token}' {extra} {data} 'http://localhost{path}'"
+            f"curl -s -X {method} -H 'Authorization: {token}' {extra} {data} 'http://localhost{path}'"
         )
 
     machine.succeed("cp ${compose} /tmp/demo.yml")

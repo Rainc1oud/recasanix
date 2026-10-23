@@ -95,12 +95,20 @@ let
       seed ${sysroot}/etc/casaos/user-service.conf.sample "$config/user-service.conf"
       seed ${sysroot}/etc/casaos/app-management.conf.sample "$config/app-management.conf"
       seed ${sysroot}/etc/casaos/casaos.conf.sample "$config/casaos.conf"
-      # VENDOR-owned key in the hot file: Nix owns smb.conf, so the root service must only ever manage
-      # the shares fragment (include-only mode). Enforced on every boot, the rest of the file untouched.
+      # VENDOR-owned keys in the hot files, enforced on every boot, the rest of each file untouched:
+      # - Nix owns smb.conf → the root service manages only the shares fragment (include-only mode)
+      # - the image owns updates, packages, OS upgrade, modules → the core offers none of them
+      # - the first administrator is created on the machine (recasanix-user-admin), never over the web
       crudini --set "$config/casaos.conf" server SambaMainConfig ${
         if cfg.smb.enable then "external" else "managed"
       }
+      crudini --set "$config/casaos.conf" server ImageManaged true
       chmod 0600 "$config/casaos.conf"
+      crudini --set "$config/user-service.conf" app FirstAdmin local
+      chmod 0600 "$config/user-service.conf"
+      # VENDOR-owned: anonymous statistics (PostHog, upstream default on) stay off; the core folds
+      # the marker into its own state at every start (pkg/telemetry ApplyOffMarker)
+      install -m 0600 /dev/null "$data/telemetry-off"
       seed /dev/null "$config/env" # app-management reads it at start; empty unless configured
 
       # VENDOR-owned, rebuilt on every boot: start.d is *executed* by the root service at startup, so
@@ -119,38 +127,36 @@ let
     name = "recasanix-user-admin";
     runtimeInputs = with pkgs; [
       coreutils
+      gnugrep
       systemd
+      casaos-user-service # -ru (reset-password)
     ];
     text = builtins.readFile ./recasaos-user-admin.sh;
   };
 
-  # The fork's local-only account lifecycle (docs/security-bootstrap.md in the user-service repo):
-  # disabled oneshots, never wantedBy anything, credentials loaded from root-only /run files.
-  mkAccountOneshot =
-    {
-      description,
-      subcommand,
-      dir,
-      files, # credential name -> source file name
-      conflicts,
-    }:
-    {
-      inherit description conflicts;
-      before = [ "casaos-user-service.service" ];
-      # Not enabled: an administrator starts it explicitly (recasanix-user-admin).
-      serviceConfig = {
-        Type = "oneshot";
-        LoadCredential = lib.mapAttrsToList (name: file: "${name}:${dir}/${file}") files;
-        ExecStart = "${lib.getExe pkgs.casaos-user-service} ${subcommand} -c /etc/casaos/user-service.conf";
-        ExecStopPost = "-${pkgs.coreutils}/bin/rm -f -- ${
-          lib.concatMapStringsSep " " (f: "${dir}/${f}") (lib.attrValues files)
-        }";
-        UMask = "0077";
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectHome = true;
-      };
+  # First administrator, created on the machine (`[app] FirstAdmin = local`): a disabled oneshot,
+  # never wantedBy anything, credentials loaded from root-only /run files (systemd LoadCredential →
+  # `casaos-user-service -bootstrap-admin` reads $CREDENTIALS_DIRECTORY/{username,password}).
+  bootstrapDir = "/run/recasaos-user-bootstrap";
+  bootstrapOneshot = {
+    description = "ReCasaOS one-time local administrator bootstrap";
+    conflicts = [ "casaos-user-service.service" ];
+    before = [ "casaos-user-service.service" ];
+    # Not enabled: an administrator starts it explicitly (recasanix-user-admin bootstrap).
+    serviceConfig = {
+      Type = "oneshot";
+      LoadCredential = [
+        "username:${bootstrapDir}/username"
+        "password:${bootstrapDir}/password"
+      ];
+      ExecStart = "${lib.getExe pkgs.casaos-user-service} -c /etc/casaos/user-service.conf -bootstrap-admin";
+      ExecStopPost = "-${pkgs.coreutils}/bin/rm -f -- ${bootstrapDir}/username ${bootstrapDir}/password";
+      UMask = "0077";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectHome = true;
     };
+  };
 
   # The pool's DATA directory is bind-mounted over a file root when the pool is present; the root service
   # pins its roots at startup, so it must start after that mount (the unit is skipped without a pool).
@@ -222,11 +228,11 @@ in
       type = lib.types.listOf lib.types.path;
       default = [ "/DATA" ];
       description = ''
-        Directories the root service is allowed to manage (browse, share). It pins them at startup and
-        refuses to start if one is missing, so they are created here on the root filesystem — the
-        appliance must come up, and show its UI, even before a data pool exists. Pools and datasets
-        are mounted below these at runtime (hot state), not declared here. Upstream's default
-        (/DATA, /mnt, /media) is narrowed to the one that has a role on this appliance.
+        Directories the appliance manages data under (browse, share), created here on the root
+        filesystem — the appliance must come up, and show its UI, even before a data pool exists.
+        Pools and datasets are mounted below these at runtime (hot state), not declared here. The
+        root service starts after their mounts. Shares are confined by the root service itself to
+        /DATA, /var/lib/casaos/files, /mnt, /media and /srv.
       '';
     };
 
@@ -330,11 +336,8 @@ in
               exe = pkgs.casaos-user-service;
               args = "-c /etc/casaos/user-service.conf";
               after = [ "casaos-message-bus.service" ];
-              conflicts = [
-                "recasaos-user-bootstrap.service"
-                "recasaos-user-password-reset.service"
-              ];
-              # The fork's hardening: account data is never group/world readable.
+              conflicts = [ "recasaos-user-bootstrap.service" ];
+              # account data is never group/world readable
               serviceConfig.UMask = "0077";
             };
 
@@ -357,7 +360,11 @@ in
               args = "-c /etc/casaos/casaos.conf";
               after = rootMounts ++ [ "casaos-message-bus.service" ];
               path = rootPath ++ lib.optionals cfg.smb.enable smbPath;
-              environment.RECASAOS_MANAGEMENT_FILE_ROOTS = lib.concatStringsSep "," cfg.fileRoots;
+              # upstream: waits for the gateway and the bus at start (TimeoutStartSec=3min, RestartSec=5)
+              serviceConfig = {
+                TimeoutStartSec = "3min";
+                RestartSec = 5;
+              };
             };
 
             # Read-only storage manager (the UI's storage widget). It registers its routes with the
@@ -432,47 +439,8 @@ in
               };
             });
 
-            # Local-only account lifecycle; see recasanix-user-admin. Disabled oneshots.
-            recasaos-user-bootstrap = mkAccountOneshot {
-              description = "ReCasaOS one-time local administrator bootstrap";
-              subcommand = "bootstrap-admin";
-              dir = "/run/recasaos-user-bootstrap";
-              files = {
-                "recasaos.admin.username" = "username";
-                "recasaos.admin.password" = "password";
-              };
-              conflicts = [
-                "casaos-user-service.service"
-                "recasaos-user-password-reset.service"
-              ];
-            };
-            recasaos-user-password-reset = mkAccountOneshot {
-              description = "ReCasaOS local administrator password reset";
-              subcommand = "reset-admin-password";
-              dir = "/run/recasaos-user-password-reset";
-              files = {
-                "recasaos.admin.username" = "username";
-                "recasaos.admin.new-password" = "new-password";
-              };
-              conflicts = [
-                "casaos-user-service.service"
-                "recasaos-user-bootstrap.service"
-              ];
-            };
-            recasaos-user-account-password-reset = mkAccountOneshot {
-              description = "ReCasaOS local non-administrator password reset";
-              subcommand = "reset-user-password";
-              dir = "/run/recasaos-user-account-password-reset";
-              files = {
-                "recasaos.user.username" = "username";
-                "recasaos.user.new-password" = "new-password";
-              };
-              conflicts = [
-                "casaos-user-service.service"
-                "recasaos-user-bootstrap.service"
-                "recasaos-user-password-reset.service"
-              ];
-            };
+            # Local-only first administrator; see recasanix-user-admin. Disabled oneshot.
+            recasaos-user-bootstrap = bootstrapOneshot;
 
             # Baseline seeding and vendor-owned refresh (task 3.2). Hot files are created once from
             # upstream's samples and never overwritten; vendor-owned entries are rebuilt on every boot, so
@@ -508,10 +476,8 @@ in
             "d ${cfg.dataDir} 0755 root root -"
             "d /var/run/casaos 0755 root root -"
             "d /var/log/casaos 0755 root root -"
-            # credential drop directories of the local account oneshots (files are created on demand)
-            "d /run/recasaos-user-bootstrap 0700 root root -"
-            "d /run/recasaos-user-password-reset 0700 root root -"
-            "d /run/recasaos-user-account-password-reset 0700 root root -"
+            # credential drop directory of the bootstrap oneshot (files are created on demand)
+            "d ${bootstrapDir} 0700 root root -"
 
             # The root service finds its helper scripts at upstream's ShellPath.
             "d /usr/share/casaos 0755 root root -"
@@ -560,13 +526,15 @@ in
           avahi = {
             enable = true;
             openFirewall = true;
-            publish = {
-              enable = true;
-              userServices = true; # smbd registers _smb._tcp through avahi
+            # smbd registers _smb._tcp (and _adisk._tcp) through avahi: user services + address records
+            settings.publish = {
+              disable-publishing = false;
+              disable-user-service-publishing = false;
+              publish-addresses = true;
             };
           };
         };
-        # share edits: `smbcontrol smbd reload-config` + `close-share` of the edited shares (ReCasaOS#159);
+        # share edits: `smbcontrol smbd reload-config` + `close-share` of the edited shares (CasaOS fix/samba-reload);
         # restart (`systemctl restart smbd`, helper.sh RestartSMBD) at startup reconcile and as fallback
         systemd.services.samba-smbd = {
           aliases = [ "smbd.service" ];

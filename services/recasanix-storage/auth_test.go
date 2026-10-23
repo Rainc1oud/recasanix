@@ -80,6 +80,9 @@ func TestAuthenticate(t *testing.T) {
 	auth := newAuthenticator(staticKey{key: &priv.PublicKey})
 
 	good := token(t, priv, tokenOpts{issuer: "casaos", expires: in(time.Hour)})
+	if err := auth.Authenticate(request(good)); err != nil {
+		t.Fatalf("a bare valid access token was refused: %v", err)
+	}
 	if err := auth.Authenticate(request("Bearer " + good)); err != nil {
 		t.Fatalf("a valid access token was refused: %v", err)
 	}

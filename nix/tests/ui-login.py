@@ -62,13 +62,14 @@ if not storage.get("access_token"):
     failed.append("no access_token left in localStorage")
 if unauthorized:
     failed.append(f"{len(unauthorized)} request(s) answered 401")
-# no Docker in this VM → the app grid request fails; the built-in apps must still show (PR ReCasaOS-UI, app grid)
+# no Docker in this VM → the app grid request fails; the built-in apps must still show
+# (CasaOS-UI fix/storage-finally-app-grid)
 if not any(e[0] == "GET" and e[1] >= 500 and "/v2/app_management/web/appgrid" in e[2] for e in log):
     failed.append("app grid did not fail: this check no longer exercises the failure path")
 if not files_cards:
     failed.append("built-in Files app not shown while the app grid fails")
-# the subscription is authenticated with a one-use ticket (PRs ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7, ReCasaOS-UI#10):
-# without one the bus refuses the handshake and the dashboard silently gets no events
+# the subscription is authenticated with the access token in `?token=` (subscription routes only):
+# without it the bus refuses the handshake and the dashboard silently gets no events
 if not bus_frames:
     failed.append("no message bus subscription: the socket.io WebSocket never received a frame")
 

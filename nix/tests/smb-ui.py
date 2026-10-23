@@ -1,9 +1,9 @@
 """Share accounts and share access through the real web UI (check smb-ui, T14).
 
 Run by nix/tests/smb-ui.nix against a booted appliance: log in, open Files, go to Shared, open
-"Share accounts" and add an account; then, in /DATA, right-click the folder "Media", choose Share, pick
-"Only one account" and the new account, and press Share. The test script then checks through the API
-that the share exists and is restricted to that account (PRs ReCasaOS-UI#8, ReCasaOS-UI#9).
+"Manage accounts" and add an account; then, in /DATA, right-click the folder "Media", choose Share, turn
+on "Require an account", pick the new account, and press Share. The test script then checks through the API
+that the share exists and is restricted to that account.
 """
 
 import sys
@@ -56,10 +56,11 @@ with sync_playwright() as p:
         step(page, "open Shared")
         shared = page.get_by_text("Shared", exact=True).first
         shared.wait_for(state="visible", timeout=60000)
-        shared.click()
+        # an always-shown onboarding tooltip of the sidebar covers the entry: click it directly
+        shared.dispatch_event("click")
 
-        step(page, "open Share accounts")
-        page.get_by_role("button", name="Share accounts").click(timeout=30000)
+        step(page, "open Manage accounts")
+        page.get_by_role("button", name="Manage accounts").click(timeout=30000)
         modal = page.locator(".samba-users-modal")
         modal.wait_for(state="visible", timeout=15000)
         modal.get_by_placeholder("Account name").fill(account)
@@ -79,7 +80,7 @@ with sync_playwright() as p:
         page.locator("[role=menuitem]", has_text="Share").filter(has_not_text="UnShare").first.click(timeout=15000)
         access = page.locator(".share-access-modal")
         access.wait_for(state="visible", timeout=15000)
-        access.get_by_text("Only one account").click()
+        access.get_by_text("Require an account").click()
         access.locator("select").select_option(account)
         access.get_by_role("button", name="Share").click()
         access.wait_for(state="hidden", timeout=30000)

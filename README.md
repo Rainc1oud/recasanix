@@ -1,6 +1,6 @@
 # ReCasaNix
 
-ReCasaNix is a NixOS spin of [ReCasaOS](https://github.com/EdmundFu-233/ReCasaOS): a semi-embedded,
+ReCasaNix is a NixOS spin of [ReCasaOS](https://github.com/ReCasaOS/CasaOS): a semi-embedded,
 image-based OS for a NAS appliance, built reproducibly from a Nix flake.
 
 ## Status
@@ -14,7 +14,7 @@ image-based OS for a NAS appliance, built reproducibly from a Nix flake.
 - [CasaOS](https://github.com/IceWhaleTech/CasaOS) is a web UI and app/device management layer for
   home servers. It has been neglected upstream for a while (no releases since December 2024), while
   it carries RCE-class vulnerabilities.
-- [ReCasaOS](https://github.com/EdmundFu-233/ReCasaOS) forked CasaOS to keep it security-maintained.
+- [ReCasaOS](https://github.com/ReCasaOS/CasaOS) forked CasaOS to keep it security-maintained.
 - ReCasaNix packages ReCasaOS for NixOS and turns it into an immutable appliance image. It is **not**
   a fork: the intention is to track ReCasaOS upstream, pinned to the component set upstream itself
   validates (`release/components.lock.json`), and to carry only the small patches an image-based,
@@ -33,7 +33,7 @@ wheel on its main features. It integrates existing open-source solutions:
 
 - NixOS-based image for a solid, vendor-managed, immutable base
 - Image-based updates (A/B partition layout; RAUC is the intended update mechanism)
-- Integrates [ReCasaOS](https://github.com/EdmundFu-233/ReCasaOS) for the UI, including the CasaOS
+- Integrates [ReCasaOS](https://github.com/ReCasaOS/CasaOS) for the UI, including the CasaOS
   App Store
 - btrfs data pool, created at runtime from the UI
 

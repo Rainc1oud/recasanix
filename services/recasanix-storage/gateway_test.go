@@ -26,7 +26,7 @@ func newFakeGateway(t *testing.T, token string) (*fakeGateway, string) {
 	t.Helper()
 	g := &fakeGateway{token: token, routes: map[string]string{}}
 	g.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+g.token {
+		if r.Header.Get("Authorization") != "Internal "+g.token {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -56,7 +56,7 @@ func newFakeGateway(t *testing.T, token string) (*fakeGateway, string) {
 
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "management.url"), []byte(g.srv.URL), 0o600)
-	os.WriteFile(filepath.Join(dir, "gateway.token"), []byte(token+"\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), []byte(token+"\n"), 0o600)
 	return g, dir
 }
 
@@ -115,7 +115,7 @@ func TestTheTokenIsReadAgainAfterAGatewayRestart(t *testing.T) {
 	gw.mu.Lock()
 	gw.token, gw.routes = "new-token", map[string]string{}
 	gw.mu.Unlock()
-	os.WriteFile(filepath.Join(dir, "gateway.token"), []byte("new-token\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), []byte("new-token\n"), 0o600)
 	if _, err := c.ensure(context.Background(), "http://127.0.0.1:9", routePaths); err != nil {
 		t.Fatalf("the new token was not picked up: %v", err)
 	}
@@ -123,11 +123,11 @@ func TestTheTokenIsReadAgainAfterAGatewayRestart(t *testing.T) {
 
 func TestWrongOrMissingCredentialsFail(t *testing.T) {
 	_, dir := newFakeGateway(t, "s3cret")
-	os.WriteFile(filepath.Join(dir, "gateway.token"), []byte("wrong\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), []byte("wrong\n"), 0o600)
 	if _, err := newGatewayClient(dir).ensure(context.Background(), "http://127.0.0.1:9", routePaths); err == nil {
 		t.Error("a wrong token was accepted by the fake, or ignored by the client")
 	}
-	os.Remove(filepath.Join(dir, "gateway.token"))
+	os.Remove(filepath.Join(dir, "internal.secret"))
 	if _, err := newGatewayClient(dir).ensure(context.Background(), "http://127.0.0.1:9", routePaths); err == nil {
 		t.Error("registration without a token succeeded")
 	}
@@ -138,7 +138,7 @@ func TestWrongOrMissingCredentialsFail(t *testing.T) {
 
 func TestTheServiceTokenIsNeverSentBeyondLoopback(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "gateway.token"), []byte("s3cret\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), []byte("s3cret\n"), 0o600)
 	for _, addr := range []string{"http://192.0.2.7:8080", "http://gateway.example:8080", "https://127.0.0.1:8080", "http://127.0.0.1"} {
 		os.WriteFile(filepath.Join(dir, "management.url"), []byte(addr), 0o600)
 		if _, err := newGatewayClient(dir).routes(context.Background()); err == nil {
@@ -153,7 +153,7 @@ func TestAnOversizedCredentialFileIsRefused(t *testing.T) {
 	for i := range big {
 		big[i] = 'a'
 	}
-	os.WriteFile(filepath.Join(dir, "gateway.token"), big, 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), big, 0o600)
 	if _, err := newGatewayClient(dir).routes(context.Background()); err == nil {
 		t.Error("an oversized token file was read")
 	}
@@ -173,7 +173,7 @@ func TestRedirectsAreNotFollowedWithTheCredential(t *testing.T) {
 	defer redirector.Close()
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "management.url"), []byte(redirector.URL), 0o600)
-	os.WriteFile(filepath.Join(dir, "gateway.token"), []byte("s3cret"), 0o600)
+	os.WriteFile(filepath.Join(dir, "internal.secret"), []byte("s3cret"), 0o600)
 	newGatewayClient(dir).routes(context.Background())
 	if leaked {
 		t.Fatal("the service token followed a redirect")
@@ -190,7 +190,7 @@ func TestKeepRegisteredWaitsForTheGatewayThenWatchesIt(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		gw, gdir := newFakeGateway(t, "s3cret")
 		_ = gw
-		for _, f := range []string{"management.url", "gateway.token"} {
+		for _, f := range []string{"management.url", "internal.secret"} {
 			b, _ := os.ReadFile(filepath.Join(gdir, f))
 			os.WriteFile(filepath.Join(dir, f), b, 0o600)
 		}

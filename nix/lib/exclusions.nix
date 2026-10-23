@@ -14,8 +14,8 @@
 #              sysroot, others (build/scripts/…) are simply never installed. Existence is asserted.
 #   patch    — source or script patched to remove a caller or a host-management function. The patch
 #              lives in nix/pkgs/<component>/patches/ and fails to apply loudly on an upstream bump.
-#   pr       — fixed by an upstream PR; built from our fork's preview branch until merged
-#              (nix/pins/preview.json, nix/pins/update.sh), then plain upstream.
+#   pr       — fixed by an upstream PR; built from our fork's staging branch until merged
+#              (nix/pins/staging.json, nix/pins/update.sh), then plain upstream.
 #   finding  — spotted, not shipped or not reachable, recorded for review (may carry a TODO).
 #
 # `caller` states whether the route / UI affordance / script function that invoked the excluded
@@ -68,20 +68,27 @@ rec {
     };
     casaos-message-bus = perService { name = "message-bus"; } ++ [
       {
-        path = "route/*.go: Authorization header parsing";
+        path = "service/{event,action}_service_websocket.go: Start / Publish / Trigger";
         kind = "pr";
-        why = "Not host management — an upstream integration break: this service takes the whole Authorization header value as the token, so `Bearer <token>` (the form the root service requires and the fork calls preferred) is a 401 here while the bare form is a 401 at the root service. No single header satisfied both; the UI showed a first login followed by an immediate logout. Invisible to curl from inside the machine because this service skips authentication for loopback clients.";
-        replacedBy = "The service strips an optional `Bearer ` prefix (bare tokens still work).";
-        caller = "n/a — found by ui-login (T10). PR ReCasaOS-MessageBus#8. Loopback auth skip: closed by PRs ReCasaOS-MessageBus#4, ReCasaOS-MessageBus#5; check service-auth (T12).";
+        why = "Not host management — startup races: a subscription made before Start (YSK, right after Services.Start) was dropped by Start's map reset; Publish/Trigger before Start dereferenced a nil context.";
+        replacedBy = "Start keeps the subscriber map; Publish/Trigger drop until Start ran.";
+        caller = "n/a — branch fix/subscriptions-before-start (ppenguin/CasaOS-MessageBus-RCOS), in staging";
       }
     ];
     casaos-user-service = perService { name = "user-service"; } ++ [
       {
-        path = "main.go: go route.EventListen()";
+        path = "route/v1/user.go: GET /v1/users/status register key, POST /v1/users/register";
         kind = "pr";
-        why = "Subscribes to the message bus source `local-storage`, which belonged to the separate CasaOS-LocalStorage service that ReCasaOS does not ship (no storage manager is part of the pinned ReCasaOS set: the UI's disk panels have no backend). Nothing registers it, the bus answers 400 and the loop retries every second (1000 times) — pure journal noise.";
+        why = "Not host management — security: an empty box hands a register key to anyone asking, so the first visitor on the LAN becomes administrator.";
+        replacedBy = "`[app] FirstAdmin = local` (set by recasanix-state-init): no key, register → 403; first administrator via `casaos-user-service -bootstrap-admin` with systemd credentials (recasanix-user-admin bootstrap). `-ru` (reset-password) now ends the process and needs no gateway.";
+        caller = "yes — the welcome page says the account is made on the machine (UI branch feat/image-managed-host). Branch feat/local-first-admin (ppenguin/CasaOS-UserService-RCOS), in staging";
+      }
+      {
+        path = "main.go: go route.EventListen()";
+        kind = "patch";
+        why = "Subscribes to the bus source `local-storage` of CasaOS-LocalStorage, which ReCasaNix does not ship (recasanix-storage serves the storage widget instead). Nothing registers the source: 1000 dial attempts, one per second, journal noise only.";
         replacedBy = "Nothing; the events it would persist do not exist.";
-        caller = "n/a — no UI or API depends on it. PR ReCasaOS-UserService#20";
+        caller = "n/a — no UI or API depends on it. patches/0001-drop-local-storage-listener.patch (local: upstream ships LocalStorage)";
       }
     ];
     casaos-app-management =
@@ -91,55 +98,69 @@ rec {
       }
       ++ [
         {
-          path = "route/*.go: Authorization header parsing";
-          kind = "pr";
-          why = "Not host management — same upstream integration break as in message-bus: the whole Authorization header value is taken as the token, so `Bearer <token>` (required by the root service) was a 401 here. Invisible from inside the machine because this service skips authentication for loopback clients.";
-          replacedBy = "The service strips an optional `Bearer ` prefix (bare tokens still work).";
-          caller = "n/a — found by ui-login (T10). PR ReCasaOS-AppManagement#7";
-        }
-        {
           path = "route/v1/docker.go: PutDockerDaemonConfiguration";
           kind = "finding";
           why = "Rewrites /etc/docker/daemon.json, then `systemctl daemon-reload`, stop and start of docker.service from an API call.";
           replacedBy = "virtualisation.docker settings and data-root on the data pool (task 3.3).";
-          caller = "yes — route registration is already commented out upstream (route/v1.go); UI still carries docker_root_dir plumbing in AppPanel.vue, harmless while the route is absent. Re-check on every bump.";
+          caller = "yes — route registration is commented out upstream (route/v1.go). Re-check on every bump.";
+        }
+        {
+          path = "route/v2.go: git-deployed apps (/v2/app_management/git/*, webhook)";
+          kind = "finding";
+          why = "Apps built from a git repository on the box: host `git` and `docker build`, plus a webhook route that skips the JWT (HMAC-signed by the app's secret).";
+          replacedBy = "Nothing yet: `git` is not on the unit's PATH, so a git app fails to clone; the webhook is reachable but has nothing to build.";
+          caller = "TODO — decide with the app story (keep: add git + review webhook; drop: hide in UI)";
         }
       ];
     casaos = perService { name = "casaos"; } ++ [
       {
         path = "${common}/shell/update.sh";
         kind = "path";
-        why = "Upstream self-update entry point (a stub that hard-exits in this fork).";
+        why = "Upstream self-update entry point (curl the installer, run it as root).";
         replacedBy = "Image/OTA pipeline (RAUC, later phase).";
-        caller = "yes — nothing in the Go code executes it; the API routes are removed by the patch below";
+        caller = "yes — no Go code runs it; the update routes are absent in image-managed mode (below)";
       }
       {
-        path = "${common}/shell/delete-old-service.sh";
+        path = "${common}/shell/smb-discovery.sh";
         kind = "path";
-        why = "Deletes old unit files and binaries under /usr and /etc and restarts the service with systemctl.";
-        replacedBy = "Nothing; units are declarative.";
-        caller = "n/a — not referenced by any Go code";
+        why = "Installs and configures discovery on a Debian host (wsdd, avahi service files, smb.conf edits).";
+        replacedBy = "services.samba-wsdd + avahi + Samba with mDNS, declared in the NixOS module.";
+        caller = "n/a — run by the upstream installer only";
       }
       {
-        path = "route/v1.go, route/v1/system.go: GET /v1/sys/version (network check), POST /v1/sys/update";
-        kind = "patch";
-        why = "Self-update over the network: the version check queried GitHub releases and SystemUpdate called UpdateSystemVersion (a stub in this fork that always errors).";
-        replacedBy = "Vendor-managed image updates.";
-        caller = "yes — POST /update removed; GET /version kept but answers locally (need_update=false, running version) because the UI calls it right after login and treats any failure as a failed login (patches/0001-disable-host-management-routes.patch). UI: Update block removed from the TopBar menu and checkVersion() made a no-op (casaos-ui patches/0001-disable-self-update.patch)";
+        path = "build/sysroot/etc/casaos/smb-discovery.conf.sample";
+        kind = "path";
+        why = "Configuration of smb-discovery.sh (above).";
+        replacedBy = "Nix (as above).";
+        caller = "n/a";
       }
       {
-        path = "route/v1.go: POST /v1/sys/stop";
-        kind = "patch";
-        why = "PostKillCasaOS calls os.Exit(0) — a UI-triggered self-kill of the service (systemd restarts it).";
-        replacedBy = "Nothing; restarting a service is an operator action, not a UI one.";
-        caller = "yes — route removed (same patch); the UI has no caller for it";
+        path = "build/sysroot/usr/lib/systemd/system/casaos-wsdd.service";
+        kind = "path";
+        why = "wsdd unit of the upstream installer (`/bin/bash`, PartOf=smbd).";
+        replacedBy = "services.samba-wsdd.";
+        caller = "n/a — never loaded (the module declares its own units)";
+      }
+      {
+        path = "route/v1.go: /v1/sys/{os,os/*,update,autoupdate,packages*,docker/containers,docker/update*,modules*,stop}";
+        kind = "pr";
+        why = "Host management through the API: OS upgrade (apt), release self-update (installer as root), automatic updates, apt and Docker package updates, optional modules (apt + archive download + unit enable), self-kill.";
+        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts. Branch feat/nixos-host (ppenguin/CasaOS-RCOS), in staging.";
+        caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (UI branch feat/image-managed-host). The `casaos module` CLI subcommand stays in the binary (root only, no API path)";
+      }
+      {
+        path = "pkg/telemetry: anonymous statistics (PostHog), on by default";
+        kind = "finding";
+        why = "Phone-home: a heartbeat every three hours with a box id.";
+        replacedBy = "recasanix-state-init writes /var/lib/casaos/telemetry-off on every boot; the core folds it into its state at start.";
+        caller = "TODO — the dashboard switch (GET/PUT /v1/sys/telemetry) can still turn it on until the next restart; decide: hide the switch or accept";
       }
       {
         path = "${common}/shell/helper.sh: DockerImgMove, PackageDocker, SetLink, TarFolder, USB_Start_Auto, USB_Stop_Auto, EditSmabaUserPassword, AddSmabaUser, ReloadSamba";
         kind = "patch";
         why = "Functions that rewrite /etc/docker/daemon.json, stop docker, enable/disable devmon units, create host users with useradd/smbpasswd, call /etc/init.d/smbd, or delete symlinks under /DATA.";
-        replacedBy = "Nothing is needed: no caller. Docker runtime setup is cold-layer Nix (task 3.3); users and shares are hot state owned by the CasaOS services (own database → generated config → reload), not by host scripts.";
-        caller = "n/a — no Go code, no other component and no UI calls these functions (only GetDeviceTree, CatNetCardState, GetNetCard, GetTimeZone, GetSysInfo and RestartSMBD are called). Patch: patches/0002-helper-strip-host-management.patch";
+        replacedBy = "Nothing is needed: no caller. Docker runtime setup is cold-layer Nix (task 3.3); users and shares are hot state owned by the CasaOS services, not by host scripts.";
+        caller = "n/a — called from Go: GetDeviceTree, CatNetCardState, GetNetCard, GetTimeZone, GetSysInfo, RestartSMBD, MountCIFS only. Patch: patches/0001-helper-strip-host-management.patch";
       }
       {
         path = "${common}/shell/{helper,usb-mount}.sh: absolute /bin/* paths";
@@ -149,42 +170,42 @@ rec {
         caller = "n/a";
       }
       {
-        path = "service/shares.go, service/system.go: absolute /bin/bash";
+        path = "CasaOS-Common utils/command OnlyExec; ${common}/shell/*.sh shebangs: /bin/bash";
         kind = "pr";
-        why = "Absolute /bin/bash does not exist on NixOS. shares.go spawned it directly; system.go went through CasaOS-Common's command.OnlyExec, which hardcodes it too, so every helper.sh call would fail. Both now run bare `bash`, resolved through the unit's PATH.";
-        replacedBy = "systemd.services.casaos.path contains bash (task 3.1).";
+        why = "Absolute /bin/bash does not exist on NixOS: every helper.sh call (OnlyExec) and every script run by its shebang would fail.";
+        replacedBy = "OnlyExec runs `bash` from PATH (CasaOS-Common fix/bash-from-path; the root builds against our Common staging through a go.mod replace until released); shebangs `#!/usr/bin/env bash` (feat/nixos-host).";
         caller = "n/a";
       }
       {
-        path = "helper.sh: RestartSMBD (systemctl restart smbd)";
-        kind = "finding";
-        why = "Restarts smbd (Debian unit name; NixOS calls it samba-smbd.service) after the shares service — hot state — has generated /etc/samba/smb.casa.conf and validated it with testparm. That generate-validate-reload pattern is the intended architecture, so this stays.";
-        replacedBy = "Kept. `smbd.service` is an alias of samba-smbd.service; the store smb.conf includes /etc/samba/smb.casa.conf, which the root service publishes in include-only mode (`SambaMainConfig = external`, upstream, merged: ReCasaOS#153) and regenerates from its share database at every start, so the fragment needs no persistence. Share accounts: upstream, merged ReCasaOS#154; passdb on the state partition.";
-        caller = "yes — exercised end to end by check smb-shares (T13)";
+        path = "route/*.go (all services): Authorization token lookup";
+        kind = "pr";
+        why = "Not host management — interoperability: every service took the whole Authorization value as the JWT, so the standard `Bearer <token>` (RFC 6750; OpenAPI `bearer`, curl `--oauth2-bearer`) was a 401. Bare token = CasaOS heritage, kept (owner decision 2026-10-23: tolerant reader, no breaking change).";
+        replacedBy = "CasaOS-Common `jwt.TokenFromAuthorization` (bare or `Bearer`, case-insensitive; other schemes untouched) used by root, gateway, user service, app management, message bus. Branches feat/bearer-authorization (ppenguin/*-RCOS), in staging; services build against our Common staging until released.";
+        caller = "n/a — the dashboard keeps sending the bare token";
       }
       {
-        path = "service/system.go: SystemReboot / SystemShutdown (`init 6` / `init 0`)";
+        path = "service/shares.go: smb.conf ownership, smbd restart on every share edit";
         kind = "pr";
-        why = "UI power buttons. Reboot and shutdown are legitimate appliance actions, but the mechanism (SysV `init`) does not exist on NixOS, and a failure was answered with 200.";
-        replacedBy = "`systemctl --no-block reboot|poweroff`, failures answered with 500 (upstream, merged: ReCasaOS#152; ported from the ReCasaOS-org fork). systemd is on the unit's path.";
-        caller = "yes — PutSystemState is kept and now works; check service-auth (T12) powers the VM off through the API";
+        why = "The core moves and rewrites /etc/samba/smb.conf (a read-only store link on NixOS) and restarts smbd on every share change, dropping every session.";
+        replacedBy = "`[server] SambaMainConfig = external` (include-only: Nix owns smb.conf, the core writes and regenerates only smb.casa.conf at every start); share edits reload smbd and close only the edited shares (fix/samba-reload, feat/nixos-host). `smbd.service` is an alias of samba-smbd.service.";
+        caller = "yes — exercised by check smb-shares (T13)";
       }
       {
         path = "main.go: command.ExecuteScripts(/etc/casaos/start.d)";
         kind = "finding";
-        why = "Executes every script in /etc/casaos/start.d at startup (CasaOS-Common command.ExecuteScripts, via /bin/sh) — arbitrary code execution from a config directory. The one legitimate occupant is the UI's register-ui-events.sh (registers UI event types with the message bus; shebang normalised to `/usr/bin/env bash`, needs curl on the unit's PATH — task 3.1).";
-        replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4 asserts this). Runner (shebang ignored, no timeout, before readiness) replaced upstream: PR ReCasaOS#159.";
+        why = "Executes every script in /etc/casaos/start.d at startup — arbitrary code execution from a config directory. The one legitimate occupant is the UI's register-ui-events.sh (registers UI event types with the message bus; `#!/bin/sh`, needs curl and logger on the unit's PATH).";
+        replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4).";
         caller = "TODO — kept deliberately (needed for UI events); vendor-owned and rebuilt each boot (task 3.2)";
       }
       {
         path = "${common}/shell/usb-mount@.service, usr/lib/systemd/system/rclone.service";
         kind = "finding";
-        why = "Upstream units the NixOS module (task 3.1) does not define: the udev-triggered removable-media template hardcodes /casaOS/server/shell and /DATA/USB_Storage_*, and rclone backs cloud-drive mounting. Both stay in the sysroot as inert files (no unit is generated from them).";
-        replacedBy = "rclone: dropped for good (cloud-drive mounting is not a product feature; casaos.service is not ordered After=rclone.service). Removable media: to be reinstated (owner decision) as a NixOS-native template unit and udev rule mounting below the file roots — deferred until the major topics (state boundary, apps, image) are tested.";
-        caller = "TODO — until removable media is reinstated the UI's USB affordance is non-functional; the cloud-drive one stays that way for good (cut it when convenient)";
+        why = "Upstream units the NixOS module does not define: the udev-triggered removable-media template hardcodes /casaOS/server/shell and /DATA/USB_Storage_*, and rclone backs cloud-drive mounting. Both stay in the sysroot as inert files.";
+        replacedBy = "rclone: dropped (cloud-drive mounting is not a product feature). Removable media: to be reinstated as a NixOS-native template unit and udev rule (deferred).";
+        caller = "TODO — until removable media is reinstated the UI's USB affordance is non-functional";
       }
       {
-        path = "cmd/migration-tool";
+        path = "cmd/migration-tool, cmd/message-bus-docgen";
         kind = "finding";
         why = "Each repo builds a migration-tool binary that drives systemctl on a Debian host.";
         replacedBy = "Not built: derivations use explicit subPackages.";
@@ -193,25 +214,11 @@ rec {
     ];
     casaos-ui = [
       {
-        path = "src/service/service.js, src/components/filebrowser/FilePanel.vue, …: Authorization header";
+        path = "src/components/TopBar.vue: update row, System packages row; src/views/Welcome.vue";
         kind = "pr";
-        why = "Not host management — an upstream integration break found while onboarding: the pinned UI sends the bare access token in `Authorization`, but the root service only accepts `Bearer <token>` (user-service tolerates both, upstream's declared 'compatibility hold'). Every root-service call from the browser was a 401 and login looked dead.";
-        replacedBy = "The UI sends `Bearer <token>` everywhere (the form upstream's own notes say the UI should move to). Not fixed: the wallpaper upload still puts the token in a `?token=` query, which the fork rejects — report upstream.";
-        caller = "n/a. PR ReCasaOS-UI#11";
-      }
-      {
-        path = "src/components/TopBar.vue: Update block, checkVersion";
-        kind = "patch";
-        why = "Polls /v1/sys/version and offers the in-place update flow (UpdateModal calls POST /v1/sys/update).";
-        replacedBy = "Vendor-managed image updates.";
-        caller = "yes — the Update block is removed from the TopBar settings menu and checkVersion() no longer queries the API (patches/0001-disable-self-update.patch)";
-      }
-      {
-        path = "src/components/BrandBar.vue: news feed (parseFeed); ContactBar, SmartBlock, share/wiki/awesome links";
-        kind = "pr";
-        why = "Not host management — phone-home and vendor channels. When the news feed was enabled, BrandBar read /var/lib/casaos/baseinfo.conf (device identifiers), base64-encoded it with the UI language and sent it as a query key to blog-casaos.zimaspace.com on every dashboard load. The other affordances sent users to IceWhale's Discord, issue tracker, wiki and social sharing for a project IceWhale no longer ships.";
-        replacedBy = "Nothing; the brand bar shows the logo only. PR ReCasaOS-UI#7.";
-        caller = "yes — the feed, its settings switch and the post-onboarding consent dialog are removed with it; the app icon CDN and App Store catalogue are kept (functional)";
+        why = "In-place update, apt package updates and web registration of the first account are host management / unsafe on an image-managed appliance.";
+        replacedBy = "Rows follow the core: automatic updates, modules and the OS badge appear only where the core answers (absent in image-managed mode); package row hidden and update row reads 'Updated with the system image' on `image_managed`; welcome page says the first account is made on the machine on `first_admin: local`. Branch feat/image-managed-host (ppenguin/CasaOS-UI-RCOS), in staging.";
+        caller = "yes";
       }
     ];
   };
@@ -267,7 +274,7 @@ rec {
       for upstream bumps and for the conversation with the ReCasaOS maintainer.
 
       Kinds: `path` = not shipped (existence asserted), `patch` = local patch (nix/pkgs/*/patches), `pr` = fixed by an
-      upstream PR, built from our preview branch until merged (nix/pins/preview.json), `finding` = recorded for review. `TODO` in the last column is an open item, not a decision.
+      upstream PR (branch), built from our fork's staging branch until merged (nix/pins/staging.json), `finding` = recorded for review. `TODO` in the last column is an open item, not a decision.
 
       | Component | Path | Kind | Why | What replaces it | Caller disabled? |
       |---|---|---|---|---|---|

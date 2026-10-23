@@ -1,11 +1,9 @@
 # T12 — the trust boundary between the CasaOS services. Loopback is not an identity: any local
 # process, and any container on the host network, reaches the services' listeners. The message bus
 # and app management skip the user token only for an in-stack caller — one that presents the
-# gateway's per-start service credential (/run/casaos/gateway.token, root-only), or that really
-# arrived on the bus's root-only unix socket. Upstream PRs, carried as patches until merged:
-# PRs: ReCasaOS-MessageBus#4, ReCasaOS-MessageBus#5, ReCasaOS-AppManagement#6, ReCasaOS-UserService#19, ReCasaOS-AppManagement#5, ReCasaOS-UI#6,
-# ReCasaOS#151 (merged). Power actions: ReCasaOS#152 (merged): the UI's shutdown
-# button reaches systemd.
+# gateway's per-boot internal secret (`Authorization: Internal <secret>`, /run/casaos/internal.secret,
+# root-only), or that really arrived on the bus's root-only unix socket (ReCasaOS org, upstream).
+# Power actions: the UI's shutdown button reaches systemd.
 { pkgs, modules }:
 pkgs.testers.runNixOSTest {
   name = "recasanix-service-auth";
@@ -41,7 +39,7 @@ pkgs.testers.runNixOSTest {
     bus = machine.succeed("cat /run/casaos/message-bus.url").strip()
     apps = machine.succeed("cat /run/casaos/app-management.url").strip()
     # the credential travels through a file descriptor, never on a command line
-    cred = "-H @<(printf 'Authorization: Bearer %s\\n' \"$(< /run/casaos/gateway.token)\")"
+    cred = "-H @<(printf 'Authorization: Internal %s\\n' \"$(< /run/casaos/internal.secret)\")"
 
     def code(cmd):
         """HTTP status of a curl run under bash (for the process substitution in `cred`)."""
@@ -52,8 +50,9 @@ pkgs.testers.runNixOSTest {
         assert got in codes, f"curl {cmd} -> {got}, want one of {codes}"
 
     with subtest("the credential is root-only"):
-        machine.succeed("test \"$(stat -c '%U %a' /run/casaos/gateway.token)\" = 'root 600'")
-        machine.succeed("test \"$(stat -c '%U %a' /tmp/message-bus.sock)\" = 'root 600'")
+        machine.succeed("test \"$(stat -c '%U %a' /run/casaos/internal.secret)\" = 'root 600'")
+        machine.succeed("test \"$(stat -c '%U' /run/casaos/message-bus.sock)\" = root")
+        machine.fail("runuser -u nobody -- test -w /run/casaos/message-bus.sock")
 
     with subtest("in-stack callers present the credential: everything registered, no 401 at the bus"):
         # root service, user service, app management and the UI's start.d script all register event
@@ -73,7 +72,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("message bus: loopback alone is not an identity"):
         expect(f"{bus}/v2/message_bus/event_type", "401")
-        expect(f"-H 'Authorization: Bearer not-the-credential' {bus}/v2/message_bus/event_type", "401")
+        expect(f"-H 'Authorization: Internal not-the-credential' {bus}/v2/message_bus/event_type", "401")
         expect(f"{cred} {bus}/v2/message_bus/event_type", "200")
 
     with subtest("message bus: Host: unix proves nothing, also not through the gateway"):
@@ -87,33 +86,29 @@ pkgs.testers.runNixOSTest {
         # and a local process does not get in through the gateway either
         expect("http://localhost/v2/message_bus/event_type", "401")
 
-    # A browser subscribes with a one-use ticket (POST /v2/message_bus/ticket with its token sets an
-    # HttpOnly cookie; the WebSocket handshake redeems it): no subscription without one, and no token in
-    # a URL. PRs ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7.
-    with subtest("message bus: subscriptions need a one-use ticket"):
+    # A browser subscribes with its access token in `?token=` (browsers set no headers on a
+    # WebSocket); only the subscription routes take it there.
+    with subtest("message bus: subscriptions need the access token"):
         machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
         machine.wait_for_unit("casaos-user-service.service")
-        token = json.loads(machine.succeed(
+        tokens = json.loads(machine.succeed(
             "curl -s -X POST -H 'Content-Type: application/json' "
             "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
-        ))["data"]["token"]["access_token"]
+        ))["data"]["token"]
+        token = tokens["access_token"]
         sio = f"http://{lan}/v2/message_bus/socket.io/?EIO=3&transport=websocket"
-        upgrade = ("--max-time 3 -A recasanix-test -H 'Connection: Upgrade' -H 'Upgrade: websocket' "
+        upgrade = ("--max-time 3 -H 'Connection: Upgrade' -H 'Upgrade: websocket' "
                    "-H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='")
-        def handshake(extra=""):
-            return machine.execute(f"curl -s -o /dev/null -w '%{{http_code}}' {upgrade} {extra} '{sio}'")[1].strip()
-        assert handshake() == "401", "a subscription without a ticket"
-        machine.succeed(
-            f"curl -sf -A recasanix-test -c /tmp/bus.cookies -X POST -H 'Authorization: Bearer {token}' "
-            f"http://{lan}/v2/message_bus/ticket"
-        )
-        machine.succeed("grep -q recasaos_bus_ticket /tmp/bus.cookies")
-        assert handshake("-b /tmp/bus.cookies") == "101", "a ticketed subscription"
-        assert handshake("-b /tmp/bus.cookies") == "401", "a replayed ticket"
+        def handshake(query=""):
+            return machine.execute(f"curl -s -o /dev/null -w '%{{http_code}}' {upgrade} '{sio}{query}'")[1].strip()
+        assert handshake() == "401", "a subscription without a token"
+        assert handshake(f"&token={token}") == "101", "a subscription with the access token"
+        # the token in a query is taken on the subscription routes only
+        expect(f"'http://{lan}/v2/message_bus/event_type?token={token}'", "401")
 
     with subtest("message bus: the unix socket is root-only"):
-        expect("--unix-socket /tmp/message-bus.sock http://unix/v2/message_bus/event_type", "200")
-        machine.fail("runuser -u nobody -- curl -sf --unix-socket /tmp/message-bus.sock http://unix/v2/message_bus/event_type")
+        expect("--unix-socket /run/casaos/message-bus.sock http://unix/v2/message_bus/event_type", "200")
+        machine.fail("runuser -u nobody -- curl -sf --unix-socket /run/casaos/message-bus.sock http://unix/v2/message_bus/event_type")
 
     with subtest("app management: loopback alone is not an identity"):
         expect(f"{apps}/v2/app_management/compose", "401")
@@ -136,7 +131,7 @@ pkgs.testers.runNixOSTest {
         # 200-vs-500 answer is covered by the PR's unit tests; here: systemd got the job from casaos.
         machine.execute(
             f"curl -s -o /dev/null -X PUT "
-            f"-H 'Authorization: Bearer {token}' http://localhost/v1/sys/state/off "
+            f"-H 'Authorization: {token}' http://localhost/v1/sys/state/off "
             "</dev/null >/dev/console 2>&1 &"
         )
         machine.wait_for_console_text(r"poweroff requested from client .*\(unit casaos\.service\)")

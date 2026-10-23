@@ -1,57 +1,43 @@
-# casaos — the ReCasaOS root service (task 1.5) plus the isolated public-file portal.
+# casaos — the ReCasaOS root service (task 1.5).
 {
+  lib,
   mkCasaosGo,
+  oapi-codegen-v1,
   components,
   src,
 }:
 mkCasaosGo {
   pname = "casaos";
-  # upstream: common/constants.go (VERSION)
-  version = "0.4.17-recasaos.1";
+  version = lib.removePrefix "v" components.recasaos.tag;
   inherit src;
-  vendorHash = "sha256-GB98MgIJ2VrRRxeTs5+7kVsLIhdY3YH12kaDbN3kIgA=";
+  vendorHash = "sha256-T+/8xOpkjHvNbsBYyNL8GhLJfMgiNvDC7TZ4YldtzaY=";
 
   # Deviation from upstream (CGO_ENABLED=1, CGO_LDFLAGS=-static, UPX): nothing in the tree uses cgo
-  # (`grep -rn 'import "C"'` is empty; sqlite is glebarez/modernc, pure Go), so build with
-  # CGO_ENABLED=0 and upstream's own `netgo osusergo` tags. That yields static binaries, which the
-  # public-file portal's minimal RootDirectory jail requires anyway. No UPX.
+  # (`grep -rn 'import "C"'` is empty; sqlite is glebarez/modernc, pure Go) → CGO_ENABLED=0 with
+  # upstream's own `netgo osusergo` tags; static binary. No UPX.
   env.CGO_ENABLED = "0";
   tags = [
     "netgo"
     "osusergo"
   ];
 
-  subPackages = [
-    "."
-    "cmd/recasaos-public-files"
-  ];
+  subPackages = [ "." ];
   renameBinaries.CasaOS = "casaos";
   repo = components.recasaos.repo;
-  description = "ReCasaOS root service (files, storage, shares, system) and public-file portal";
+  description = "ReCasaOS root service (files, shares, system, stats, alerts)";
   mainProgram = "casaos";
 
-  # Guardrail patches (see docs/upstream-exclusions.md): self-update / self-kill routes removed,
-  # host-management functions stripped from helper.sh, absolute /bin paths removed.
-  patches = [
-    ./patches/0001-disable-host-management-routes.patch
-    ./patches/0002-helper-strip-host-management.patch
-  ];
+  # Guardrail patch (docs/upstream-exclusions.md): host-management functions stripped from helper.sh,
+  # absolute /bin paths removed. Routes: upstream switch `[server] ImageManaged` (no patch).
+  patches = [ ./patches/0001-helper-strip-host-management.patch ];
 
-  # Shell helpers carry no store paths at all. Commands stay bare (the service unit's PATH resolves
-  # them) and the interpreter comes from `#!/usr/bin/env bash`; deliberately no patchShebangs.
+  # codegen/ is gitignored, `go generate` fetches the generator and a floating message-bus spec →
+  # pinned generator, spec from the pinned message bus (as app-management)
+  nativeBuildInputs = [ oapi-codegen-v1 ];
   postPatch = ''
-    for f in helper.sh usb-mount.sh assist.sh; do
-      substituteInPlace "build/sysroot/usr/share/casaos/shell/$f" \
-        --replace-fail '#!/bin/bash' '#!/usr/bin/env bash'
-    done
-  '';
-
-  # The portal runs in a jail whose root is a directory (RootDirectory=), so the static binary has
-  # to be present there as a real file, at the path upstream's `make build-public-files` uses.
-  # (Appended to the recipe's postInstall through `extraPostInstall`.)
-  extraPostInstall = ''
-    jail="$out/share/casaos-sysroot/usr/lib/recasaos-public-files/rootfs/usr/bin"
-    mkdir -p "$jail"
-    cp "$out/bin/recasaos-public-files" "$jail/"
+    mkdir -p codegen/message_bus
+    oapi-codegen -generate types,server,spec -package codegen api/casaos/openapi.yaml > codegen/casaos_api.go
+    oapi-codegen -generate types,client -package message_bus \
+      ${components.recasaos-message-bus.src}/api/message_bus/openapi.yaml > codegen/message_bus/api.go
   '';
 }

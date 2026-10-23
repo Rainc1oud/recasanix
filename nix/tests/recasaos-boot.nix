@@ -47,12 +47,13 @@ pkgs.testers.runNixOSTest {
         timeout=60,
     )
 
-    # the fork's hardening must still be in force
+    # account data is never group/world readable
     machine.succeed("systemctl show casaos-user-service.service -p UMask | grep -q 0077")
 
-    # Local-only administrator bootstrap: the fork never takes a setup secret over HTTP.
-    machine.succeed("curl -s http://localhost/v1/users/status | grep -q '\"initialized\":false'")
-    machine.succeed("curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost/v1/users/register | grep -x 410")
+    # Local-only administrator bootstrap (`[app] FirstAdmin = local`): no register key over HTTP.
+    status = json.loads(machine.succeed("curl -s http://localhost/v1/users/status"))["data"]
+    assert status["initialized"] is False and status["key"] == "" and status["first_admin"] == "local", status
+    machine.succeed("curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost/v1/users/register | grep -x 403")
     machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
     machine.wait_for_unit("casaos-user-service.service")
     machine.succeed("curl -s http://localhost/v1/users/status | grep -q '\"initialized\":true'")
@@ -67,12 +68,10 @@ pkgs.testers.runNixOSTest {
         "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
     ))
     token = login["data"]["token"]["access_token"]
-    # The root service only accepts `Authorization: Bearer <token>` (user-service also takes the bare
-    # token). The pinned UI used to send the bare token, so every root-service call from the browser
-    # was a 401 and login looked dead; the UI is patched to send Bearer (PR ReCasaOS-UI#11).
+    # every service takes the bare access token in `Authorization` (as the UI sends it)
     def api(method, path):
         return machine.succeed(
-            f"curl -s -o /dev/null -w '%{{http_code}}' -X {method} -H 'Authorization: Bearer {token}' http://localhost{path}"
+            f"curl -s -o /dev/null -w '%{{http_code}}' -X {method} -H 'Authorization: {token}' http://localhost{path}"
         )
 
     code = api("GET", "/v1/sys/utilization")
@@ -80,14 +79,28 @@ pkgs.testers.runNixOSTest {
 
     # The UI calls this right after login and treats any failure as a failed login: it must answer
     # locally (no network update check) with the running version.
-    version = json.loads(machine.succeed(f"curl -s -H 'Authorization: Bearer {token}' http://localhost/v1/sys/version"))
+    version = json.loads(machine.succeed(f"curl -s -H 'Authorization: {token}' http://localhost/v1/sys/version"))
     assert version["success"] == 200 and version["data"]["need_update"] is False, version
-    assert version["data"]["current_version"], version
+    assert version["data"]["image_managed"] is True and version["data"]["current_version"], version
 
-    # the removed self-update / self-kill routes are gone (guardrail)
-    for method, path in [("POST", "/v1/sys/update"), ("POST", "/v1/sys/stop")]:
+    # host management is absent (`[server] ImageManaged`, guardrail): OS upgrade, self-update,
+    # automatic updates, apt/Docker packages, modules, self-kill
+    for method, path in [
+        ("GET", "/v1/sys/os"),
+        ("POST", "/v1/sys/os/upgrade/start"),
+        ("POST", "/v1/sys/update"),
+        ("GET", "/v1/sys/autoupdate"),
+        ("GET", "/v1/sys/packages"),
+        ("POST", "/v1/sys/docker/update"),
+        ("GET", "/v1/sys/modules"),
+        ("POST", "/v1/sys/stop"),
+    ]:
         code = api(method, path)
         assert code in ("404", "405"), f"{method} {path} -> {code}"
+
+    # anonymous statistics stay off (vendor-owned marker, folded into the core's state at start)
+    telemetry = json.loads(machine.succeed(f"curl -s -H 'Authorization: {token}' http://localhost/v1/sys/telemetry"))
+    assert telemetry["data"]["enabled"] is False, telemetry
 
     # The helpers must run in the service's own environment, not just exist on disk: take PATH from
     # the unit and source helper.sh exactly the way the Go code does.

@@ -51,7 +51,7 @@ pkgs.testers.runNixOSTest {
     access, refresh = login["access_token"], login["refresh_token"]
 
     def call(method, path, bearer=None, body=None):
-        auth = f"-H 'Authorization: Bearer {bearer}' " if bearer else ""
+        auth = f"-H 'Authorization: {bearer}' " if bearer else ""
         data = f"-H 'Content-Type: application/json' -d '{body}' " if body else ""
         out = machine.succeed(f"curl -s -w '\\n%{{http_code}}' -X {method} {auth}{data}http://localhost{path}")
         text, code = out.rsplit("\n", 1)
@@ -210,7 +210,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl restart casaos-gateway.service")
     machine.wait_for_open_port(80)
     machine.wait_until_succeeds(
-        f"curl -s -o /dev/null -w '%{{http_code}}' -H 'Authorization: Bearer {access}' http://localhost/v1/disks | grep -x 200",
+        f"curl -s -o /dev/null -w '%{{http_code}}' -H 'Authorization: {access}' http://localhost/v1/disks | grep -x 200",
         timeout=120,
     )
     machine.succeed("test \"$(systemctl show recasanix-storage.service -p NRestarts --value)\" = 0")

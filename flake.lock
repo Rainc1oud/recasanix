@@ -1,19 +1,36 @@
 {
   "nodes": {
-    "casaos-ui": {
+    "casaos-common": {
       "flake": false,
       "locked": {
-        "lastModified": 1791752694,
-        "narHash": "sha256-Q6UzrPHkgaAFk+aD09VFMZlc29VO5TKdXFVIy3aYJhw=",
+        "lastModified": 1792759391,
+        "narHash": "sha256-sTU0ppm34w7cj0Yt2+vnoKBneHwuedbWDHyi1lLDCew=",
         "owner": "ppenguin",
-        "repo": "ReCasaOS-UI-EF",
-        "rev": "a6e23c54bd5eded710c192ba390ce81b45b34615",
+        "repo": "CasaOS-Common-RCOS",
+        "rev": "c719b673ebbbfd38bf35f293a345b6b64440f6b0",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
-        "ref": "recasanix-preview",
-        "repo": "ReCasaOS-UI-EF",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-Common-RCOS",
+        "type": "github"
+      }
+    },
+    "casaos-ui": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792759384,
+        "narHash": "sha256-84DBTtv9mZQO3IvolfYmePkEznzn9jwYGahTJE0XH2Y=",
+        "owner": "ppenguin",
+        "repo": "CasaOS-UI-RCOS",
+        "rev": "a079a3c533c65d9a4d42308e2a83467700038d75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ppenguin",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-UI-RCOS",
         "type": "github"
       }
     },
@@ -76,12 +93,12 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1789785513,
-        "narHash": "sha256-B44WL6h0XoLjJ41bUPJk0X5SDinLCII//6EcBLXKiJ0=",
-        "rev": "20b1ddd1aa5ace70c9468305030aa4f9ef79671b",
-        "revCount": 1076192,
+        "lastModified": 1792502884,
+        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+        "revCount": 1097682,
         "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1076192%2Brev-20b1ddd1aa5ace70c9468305030aa4f9ef79671b/01a0bae8-06eb-7ec1-9128-ba6a8ce0b21b/source.tar.gz"
+        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1097682%2Brev-02c087f3fe673c9e317f206a627cb6b910336dbe/01a15cfc-ef9d-76f0-b6de-552170f0449d/source.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -91,89 +108,107 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1791752703,
-        "narHash": "sha256-QVOoxxjZi6glMbGdynAwKlChvSJCTk5hHrKBY9f1vk4=",
+        "lastModified": 1792759376,
+        "narHash": "sha256-Lr70cKsa+uNRypdq9D84COZJsB5FnjjRe1U1PoErrs8=",
         "owner": "ppenguin",
-        "repo": "ReCasaOS-EF",
-        "rev": "eb963c2b3a59734328c830ad8306b9211923dde9",
+        "repo": "CasaOS-RCOS",
+        "rev": "8c10365c54d08a5f7b7c8c8712d07798949e6d53",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
-        "ref": "recasanix-preview",
-        "repo": "ReCasaOS-EF",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-RCOS",
         "type": "github"
       }
     },
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1791752707,
-        "narHash": "sha256-5iBHXeQvxNwZn10TCNUdsgowvjVBl5eeu/QjiPPaDUw=",
+        "lastModified": 1792759394,
+        "narHash": "sha256-/y3vgA7wO46Kz9qL7IffGXcURkhE7mKUBm9koHFplbw=",
         "owner": "ppenguin",
-        "repo": "ReCasaOS-AppManagement-EF",
-        "rev": "0d4f23bc06bdac9839639b3ff52112feab6bbe79",
+        "repo": "CasaOS-AppManagement-RCOS",
+        "rev": "96a3409097b7243d72d2982a5f0bacb71a29224c",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
-        "ref": "recasanix-preview",
-        "repo": "ReCasaOS-AppManagement-EF",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-AppManagement-RCOS",
         "type": "github"
       }
     },
     "recasaos-gateway": {
       "flake": false,
       "locked": {
-        "lastModified": 1789671474,
-        "narHash": "sha256-VQC+Vm7YJgnTyQ+gaL4qOyvr6sDt5FJs2NrKDtyUKtE=",
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-Gateway",
-        "rev": "ba42b100337ee42c00c3dad1d49caf1450596064",
+        "lastModified": 1792759397,
+        "narHash": "sha256-sQ8HlfgvW+tNGH0CQ3d3ByeIalNq+DCXC7YFMue0W1k=",
+        "owner": "ppenguin",
+        "repo": "CasaOS-Gateway-RCOS",
+        "rev": "9b99470267abfed7bc604cb9df9713ab911b22fe",
         "type": "github"
       },
       "original": {
-        "owner": "EdmundFu-233",
-        "repo": "ReCasaOS-Gateway",
+        "owner": "ppenguin",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-Gateway-RCOS",
+        "type": "github"
+      }
+    },
+    "recasaos-install": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792755484,
+        "narHash": "sha256-Q6sLC6saVpcrhrfD7DNApWZRnyEDq6yzV+65ZHZkS/E=",
+        "owner": "ReCasaOS",
+        "repo": "CasaOS-Install",
+        "rev": "53674be97f87639672fc5307dac09609a99940c1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ReCasaOS",
+        "repo": "CasaOS-Install",
         "type": "github"
       }
     },
     "recasaos-message-bus": {
       "flake": false,
       "locked": {
-        "lastModified": 1791752710,
-        "narHash": "sha256-jj7qHoYf4nW4zjuxRu+fYJXt4EwSoK2bR5LHsvoNaDY=",
+        "lastModified": 1792759387,
+        "narHash": "sha256-lbmBn9K8/F/AV039vC2W+cw6mJU6vYRFhjfK29Qywtw=",
         "owner": "ppenguin",
-        "repo": "ReCasaOS-MessageBus-EF",
-        "rev": "9fa90125e316b515e6817351f284643b8de087da",
+        "repo": "CasaOS-MessageBus-RCOS",
+        "rev": "707280122e831d866cdac3b6a035424b98ccc91a",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
-        "ref": "recasanix-preview",
-        "repo": "ReCasaOS-MessageBus-EF",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-MessageBus-RCOS",
         "type": "github"
       }
     },
     "recasaos-user-service": {
       "flake": false,
       "locked": {
-        "lastModified": 1791752713,
-        "narHash": "sha256-Gwa9KrLQuZ8DRV1leRheWxasvP9eYf1/Rwt5u6McEDQ=",
+        "lastModified": 1792759379,
+        "narHash": "sha256-mH1/vM7+EtzUOl+QihfMdDZkM0vtQVL0krMvLe8ikic=",
         "owner": "ppenguin",
-        "repo": "ReCasaOS-UserService-EF",
-        "rev": "75f9d05afa860cc7bef9cc57ea36f0a15f4747a5",
+        "repo": "CasaOS-UserService-RCOS",
+        "rev": "332b817a517c04a2757ce533662860a552611f74",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
-        "ref": "recasanix-preview",
-        "repo": "ReCasaOS-UserService-EF",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-UserService-RCOS",
         "type": "github"
       }
     },
     "root": {
       "inputs": {
+        "casaos-common": "casaos-common",
         "casaos-ui": "casaos-ui",
         "flake-parts": "flake-parts",
         "git-hooks": "git-hooks",
@@ -181,6 +216,7 @@
         "recasaos": "recasaos",
         "recasaos-app-management": "recasaos-app-management",
         "recasaos-gateway": "recasaos-gateway",
+        "recasaos-install": "recasaos-install",
         "recasaos-message-bus": "recasaos-message-bus",
         "recasaos-user-service": "recasaos-user-service"
       }

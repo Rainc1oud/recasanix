@@ -287,9 +287,9 @@ grep -rnE '/nix/store/|(^|[^-[:alnum:]])/(usr/)?s?bin/[a-z]' \
    Upstream's `.env.production` decides API base paths — read it before overriding anything.
 3. Install the result to `$out/share/casaos-sysroot/var/lib/casaos/www/`, matching the Go packages'
    sysroot convention.
-4. `meta.license`: **not** Apache-2.0 — no LICENSE file exists upstream. Use
-   `lib.licenses.unfree` with a comment pointing at AGENTS.md §6, and keep the source input
-   trivially switchable to `EdmundFu-233/ReCasaOS-UI`.
+4. `meta.license`: `lib.licenses.unfree` with a comment pointing at AGENTS.md §6 (written when no
+   LICENSE existed upstream; 2026-10-12 IceWhale relicensed Apache-2.0, EF's own commits still
+   uncovered → §6), and keep the source input trivially switchable to `EdmundFu-233/ReCasaOS-UI`.
 
 **Acceptance**: `index.html` and a hashed JS bundle exist under the install path; the build runs
 fully offline (no network in the build sandbox).
@@ -1034,21 +1034,20 @@ fail them.
 
 `nix/tests/service-auth.nix`. Loopback is not an identity: any local process, and any container on the host
 network, reaches the services' listeners. The message bus and app management skip the user token only for an
-in-stack caller — the gateway's per-start service credential (`/run/casaos/gateway.token`, root `0600`) from
-loopback, or a connection that really arrived on the bus's root-only unix socket. Asserts:
+in-stack caller — `Authorization: Internal <secret>` with the gateway's per-boot secret
+(`/run/casaos/internal.secret`, root `0600`) from loopback, or a connection that really arrived on the bus's
+root-only unix socket (`/run/casaos/message-bus.sock`). Asserts:
 
 - every in-stack registrant (root, user service, app management, the UI's start.d script) still registers its
   event types, and the bus logged no 401;
-- loopback without / with a wrong credential, `Host: unix` (direct, through the gateway, and from the LAN
-  address — pinned upstream answered **200 with every event type** there), and the socket as `nobody` are refused;
-- a browser's WebSocket subscription needs a one-use ticket (`POST /v2/message_bus/ticket` sets an HttpOnly,
-  SameSite=Strict cookie the handshake redeems): none → 401, ticket → 101, replay → 401 (PRs
-  ReCasaOS-MessageBus#6, ReCasaOS-MessageBus#7; dashboard side ReCasaOS-UI#10, asserted by T10, which requires frames on the socket.io
-  subscription);
+- loopback without / with a wrong secret, `Host: unix` (direct, through the gateway, from the LAN address), and
+  the socket as `nobody` are refused;
+- a browser's subscription needs the access token in `?token=` (subscription routes only): none → 401,
+  access token → 101; `?token=` elsewhere → 401;
 - `PUT /v1/sys/state/off` ends in a `systemctl poweroff` requested by `casaos.service`, and the VM powers off.
 
-Code: upstream PRs to EdmundFu-233 (list + order: [COMPARISON-FORKS.md](./COMPARISON-FORKS.md)), built from
-our forks' preview branches until merged (AGENTS.md §2, "ReCasaOS pinning").
+Code: ReCasaOS org (upstream); our changes as PR branches in `ppenguin/*-RCOS`, built from `recasanix-staging`
+(AGENTS.md §2, "ReCasaOS pinning"; list: COMPARISON-FORKS.md).
 
 ### T13 — Network shares
 
@@ -1062,11 +1061,10 @@ that account in and gives it the files, refuses other accounts, guests and wrong
 use cannot be deleted; deleting the fragment and restarting the root service restores it; accounts and
 passwords survive a reboot; re-assigning or removing the share hands the directory over / back to root.
 Share edits reload smbd instead of restarting it: an unrelated edit keeps smbd's PID and an open session
-on another share; narrowing a share closes that share's open sessions at once (ReCasaOS#159).
-Upstream: ReCasaOS#153, #154 (merged). Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
-T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard (PRs ReCasaOS-UI#8, ReCasaOS-UI#9). It needs
-a data pool: without Docker, app management answers the app grid with 500 and the upstream dashboard drops
-the whole grid, the built-in Files app included (an upstream UI robustness bug, not fixed here).
+on another share; narrowing a share closes that share's open sessions at once (CasaOS `fix/samba-reload`).
+`PUT /v1/samba/shares/:id` replaces account and Time Machine flag together (upstream contract).
+Include-only mode: CasaOS `feat/nixos-host`. Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
+T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard.
 
 ### Running tests
 
@@ -1079,6 +1077,20 @@ nix run .#checks.x86_64-linux.recasaos-boot.driverInteractive   # interactive de
 VM tests need KVM (`/dev/kvm` present and writable). Note this in the README when CI is set up.
 
 ---
+
+## Phase R — ReCasaOS org as base (branch `recasaos-based`, trial)
+
+Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 2026-10-23".
+
+| ID | Status | Task |
+|---|---|---|
+| R.1 | [x] | pins: `components.env` of CasaOS-Install as pin of record, `recasanix-staging` per fork, `staging.json`, `update.sh`, T7 |
+| R.2 | [x] | derivations: org module paths, offline codegen, Common staging `replace`, Go ≥ 1.26.8 (nixpkgs bump) |
+| R.3 | [x] | module: `SambaMainConfig = external`, `ImageManaged = true`, `FirstAdmin = local`, telemetry-off marker; bootstrap oneshot + `reset-password` via `-ru` |
+| R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
+| R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
+| R.6 | [x] | `nix flake check` green on the org base (T1–T14; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
+| R.7 | [ ] | open the org PRs (after owner go; ReCasaOS/CasaOS#11) |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 

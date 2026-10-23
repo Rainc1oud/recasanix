@@ -1,4 +1,4 @@
-# casaos-ui — the CasaOS Vue app, built offline from its pnpm lockfile (task 1.6).
+# casaos-ui — the CasaOS dashboard (ReCasaOS org, Vue 3), built offline from its pnpm lockfile (task 1.6).
 {
   lib,
   stdenv,
@@ -20,11 +20,8 @@ stdenv.mkDerivation (finalAttrs: {
   version = "0-unstable-${builtins.substring 0 7 components.casaos-ui.rev}";
   inherit src;
 
-  # Host-management guardrail (docs/upstream-exclusions.md): remove the in-place update UI, and
-  # stop webpack from stringifying the whole build environment into the bundle.
-  patches = [
-    ./patches/0001-disable-self-update.patch
-  ];
+  # No local patch: update/package/module rows follow the core (`[server] ImageManaged`, upstream PR
+  # in our staging); the build environment is no longer stringified into the bundle upstream.
 
   nativeBuildInputs = [
     nodejs_22
@@ -36,7 +33,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-MEIk6ZE7WNKWBt0l26K8WjzjIstG0LBVVSpYJlJ9pFc=";
+    hash = "sha256-Wl4dRXFs3G9y4BfuTyHn57zfs0An+W8mbAKSex7rHuc=";
   };
 
   # Upstream's `pnpm build`, with the destination directed at $out. `.env.production` (NODE_ENV=prod)
@@ -44,7 +41,8 @@ stdenv.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
     # pnpm does not run dependency lifecycle scripts. @vue-office/* ship their entry point through a
-    # postinstall that copies lib/v2/index.js (Vue 2) to lib/index.js; run exactly those, and only those.
+    # postinstall that copies lib/v<major>/index.js (the installed Vue's) to lib/index.js; run exactly
+    # those, and only those.
     for pkg in docx excel pdf; do
       (cd "node_modules/@vue-office/$pkg" && node lib/script/postinstall.js)
     done
@@ -61,9 +59,6 @@ stdenv.mkDerivation (finalAttrs: {
     runHook preInstall
     mkdir -p "$out/share"
     cp -r build/sysroot "$out/share/casaos-sysroot"
-    # `#!/usr/bin/bash` does not exist on NixOS; resolve bash through the session (AGENTS.md §5).
-    substituteInPlace "$out/share/casaos-sysroot/etc/casaos/start.d/register-ui-events.sh" \
-      --replace-fail '#!/usr/bin/bash' '#!/usr/bin/env bash'
     runHook postInstall
   '';
 
@@ -71,11 +66,10 @@ stdenv.mkDerivation (finalAttrs: {
   doCheck = false;
 
   meta = {
-    description = "CasaOS web UI (Vue), the dashboard served by the gateway";
+    description = "CasaOS web UI (Vue 3, dark theme), the dashboard served by the gateway";
     homepage = "https://github.com/${components.casaos-ui.repo}";
-    # No LICENSE file upstream (AGENTS.md §6): all rights reserved. Fine for internal prototypes;
-    # must be resolved with upstream before commercial distribution. The source is switchable to
-    # EdmundFu-233/ReCasaOS-UI in nix/lib/components.nix.
+    # AGENTS.md §6: IceWhale code + org maintainer's changes Apache-2.0 (LICENSE, NOTICE); alvins82's
+    # pre-org commits not covered → unfree until he answers, then asl20 + drop allowUnfreePredicate.
     license = lib.licenses.unfree;
     platforms = lib.platforms.linux;
   };

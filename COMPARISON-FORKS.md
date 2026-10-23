@@ -2,6 +2,37 @@
 
 Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 
+## Re-assessment 2026-10-23 (branch `recasaos-based`)
+
+| | EF | ORG |
+|---|---|---|
+| Activity since 10-07 | root: last merge 10-09; satellites/UI: 0 of 22 PRs merged; no answer on UI#14, #150 | root 263 commits, UI 177, AppMgmt 42; daily releases |
+| Password storage | argon2 | argon2id (since v0.5.15) |
+| First admin | local bootstrap | web register-by-key → our PR (`FirstAdmin = local`) |
+| Lock-of-record | `components.lock.json` | `CasaOS-Install/release/components.env` |
+| UI | Vue 2.7 (EOL) | Vue 3, licensed (alvins82 gap) |
+| T9 surface | small | larger (OS upgrade, apt/Docker packages, modules, autoupdate, telemetry) → our PR (`ImageManaged`) |
+| Contact | silent | cooperative (ReCasaOS/CasaOS#11: plan posted 2026-10-23) |
+
+- per-module split (EF + ORG mix): rejected — shared contracts (auth scheme, Common, bus events, UI↔API)
+- trial: whole base on ORG, our changes as PR branches in `ppenguin/*-RCOS`, consumed via `recasanix-staging`
+- of 27 EF PRs: 18 obsolete on ORG (already there or ORG-origin); ported: below
+- lost vs EF: public-files portal (EF-only), file-root pinning env (ORG confines shares to fixed roots), chosen-password reset (ORG `-ru` = random password)
+
+### PR branches (ORG, not opened yet)
+
+| Repo | Branch | Commits | Kind |
+|---|---|---|---|
+| CasaOS-MessageBus | `fix/subscriptions-before-start` | subscription before Start survives; Publish/Trigger before Start dropped (no nil ctx) | correctness |
+| CasaOS-UI | `fix/storage-finally-app-grid` | `.finaly` typo; failing app grid keeps built-in apps | correctness |
+| CasaOS | `fix/samba-reload` | share edits reload smbd + close-share, restart only on smb.conf / Time Machine set change | correctness |
+| CasaOS | `feat/nixos-host` (on `fix/samba-reload`) | helper shebangs `env bash`; Samba include-only (`SambaMainConfig = external`); `ImageManaged` (host-management routes absent, no network version check, no autoupdate) | neutral / NixOS |
+| CasaOS-Common | `fix/bash-from-path` | OnlyExec: `bash` from PATH | neutral / NixOS |
+| CasaOS-UserService | `feat/local-first-admin` | `-ru` exits + no gateway; `FirstAdmin = local` + `-bootstrap-admin` (systemd credentials) | correctness + opt-in |
+| CasaOS-UI | `feat/image-managed-host` | package row hidden, "Updated with the system image"; welcome page for `first_admin: local` | neutral |
+
+Local patches (ReCasaNix only): helper.sh host-management strip (root), local-storage listener (UserService).
+
 ## Verdict
 
 - **Stay on EdmundFu-233** as base/pin of record.
@@ -18,15 +49,15 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 | Repos | 6 (root, gateway, user, appmgmt, msgbus, UI) | 10 (+LocalStorage, Common, Install, `_appstore` mirror) |
 | Activity since 2025 | root 345, user 11, appmgmt 12, gw 10, msgbus 5, UI 19 | root 162, appmgmt 217, UI 357, LocalStorage 60, others 28–51 |
 | Satellite repos | barely touched; still `IceWhaleTech/*` module paths, Go 1.20/1.21 | all renamed `github.com/ReCasaOS/*`, all Go 1.26, deps bumped |
-| Pinning | `release/components.lock.json`, GPG-signed checksums, SLSA, SBOMs | installer pins components by tag + SHA-256; no lock-of-record file |
-| UI | Vue 2.7 (EOL), no LICENSE | **Vue 3.5**, dark theme, no LICENSE (same caveat, README says so explicitly) |
+| Pinning | `release/components.lock.json`, GPG-signed checksums, SLSA, SBOMs | installer pins components by tag + SHA-256; since 2026-10: `CasaOS-Install/release/components.env` = tag + commit per component (lock-of-record) |
+| UI | Vue 2.7 (EOL); IceWhale code Apache-2.0 since 2026-10-12, EF's own commits: no LICENSE | **Vue 3.5**, dark theme; Apache-2.0 `LICENSE` + `NOTICE` (2026-10-12; alvins82's commits not covered) |
 | Name clash | both call themselves "ReCasaOS" | |
 
 ## Security — decisive axis
 
 | Item | EF | ORG |
 |---|---|---|
-| Password storage | argon2/bcrypt (`pkg/password`) | **unsalted MD5** (`encryption.GetMD5ByStr`), bcrypt only for 2FA recovery codes |
+| Password storage | argon2/bcrypt (`pkg/password`) | ~~unsalted MD5~~ → argon2id since v0.5.15 (upgrade on next login); web register-by-key bootstrap unchanged |
 | First admin | local-only bootstrap oneshots, web register → 410 (our module uses this) | upstream web register-by-key (first visitor on LAN claims admin) |
 | Loopback auth bypass | root: default-off; **msgbus/appmgmt still trust `c.RealIP()` == 127.0.0.1** | removed everywhere; per-boot `/var/run/casaos/internal.secret` from gateway, all components |
 | Bearer vs bare token | inconsistent across components (we carry 3 patches) | consistent (bare token, upstream-compatible) |
@@ -97,7 +128,7 @@ Not taken: telemetry, auto-update, apt updates, installer, LocalStorage, mergerf
 | `recasanix-storage` | **no** | ORG LocalStorage: still ext4/mergerfs, shell concat, fstab/devmon, no btrfs. Keep ours; add `PUT /v1/storage/rename` (ORG UI calls it) → 501 or implement via `btrfs filesystem label` |
 | local admin bootstrap integration (`recasaos-user-*` oneshots) | **lost** | ORG has no equivalent → regression |
 | public-files portal | **lost** | ORG has none |
-| T7 pin-drift via `components.lock.json` | **lost** | ORG has no lock-of-record; would need installer manifest parsing |
+| T7 pin-drift via `components.lock.json` | **lost** | ORG: `release/components.env` (tag + commit) → T7 parses that instead |
 
 ## Actions (proposed, not done)
 

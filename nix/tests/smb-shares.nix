@@ -53,7 +53,7 @@ pkgs.testers.runNixOSTest {
             "curl -s -X POST -H 'Content-Type: application/json' "
             "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
         ))
-        auth = "-H 'Authorization: Bearer " + login["data"]["token"]["access_token"] + "'"
+        auth = "-H 'Authorization: " + login["data"]["token"]["access_token"] + "'"
 
     log_in()
 
@@ -139,9 +139,11 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("avahi-browse -tpr _adisk._tcp | grep -q 'adVN=Backups'", timeout=60)
         status, out = smb("bob%bob-pass-1", "ls", share="Backups")
         assert status == 0, out
-        # an account-only update (time_machine absent) keeps the flag
-        ok("PUT", f"/v1/samba/shares/{backups['id']}", {"username": "bob"})
+        # PUT replaces both fields (upstream contract): the flag stays only when sent, goes when omitted
+        ok("PUT", f"/v1/samba/shares/{backups['id']}", {"username": "bob", "time_machine": True})
         assert "fruit:time machine = yes" in section("Backups"), section("Backups")
+        ok("PUT", f"/v1/samba/shares/{backups['id']}", {"username": "bob"})
+        assert "fruit" not in section("Backups"), section("Backups")
         ok("DELETE", f"/v1/samba/shares/{backups['id']}")
 
     with subtest("share edits reload smbd: other sessions stay, the edited share's are closed"):

@@ -1,19 +1,31 @@
 {
+  lib,
   mkCasaosGo,
+  oapi-codegen-v1,
   components,
   src,
 }:
 mkCasaosGo {
   pname = "casaos-user-service";
-  # upstream: common/version.go
-  version = "0.4.8";
+  version = lib.removePrefix "v" components.recasaos-user-service.tag;
   inherit src;
-  vendorHash = "sha256-iD5wgHsaaYfzjKNacEFnNzzQEFft0L2zOlVqHmiwGHc=";
-  # go.mod declares Go 1.26.6; nixpkgs' default `go` (1.26.x) satisfies it. If nixpkgs' default moves
-  # past what go.mod accepts, pin `go = pkgs.go_1_26` through mkCasaosGo.
+  vendorHash = "sha256-rLGcsOr+G7cUJz+lK38IzDRQlxdjQB7Ci3nUZvH7fFw=";
   subPackages = [ "." ];
-  renameBinaries.ReCasaOS-UserService = "casaos-user-service";
+  renameBinaries.CasaOS-UserService = "casaos-user-service";
   repo = components.recasaos-user-service.repo;
-  description = "ReCasaOS user service: accounts, sessions and JWT issuance";
+  description = "ReCasaOS user service: accounts, sessions, two-factor authentication and JWT issuance";
   mainProgram = "casaos-user-service";
+
+  # local patch (docs/upstream-exclusions.md): no LocalStorage on ReCasaNix → no listener for it
+  patches = [ ./patches/0001-drop-local-storage-listener.patch ];
+
+  # `go generate` (gitignored codegen/): oapi-codegen@v1.12.4 from the network and the message-bus
+  # spec from a floating URL → pinned generator, spec from the pinned message bus (see app-management).
+  nativeBuildInputs = [ oapi-codegen-v1 ];
+  postPatch = ''
+    mkdir -p codegen/user_service codegen/message_bus
+    oapi-codegen -package codegen api/user-service/openapi.yaml > codegen/user_service/user_service_api.go
+    oapi-codegen -package message_bus \
+      ${components.recasaos-message-bus.src}/api/message_bus/openapi.yaml > codegen/message_bus/api.go
+  '';
 }

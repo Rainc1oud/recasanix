@@ -1,45 +1,63 @@
 #!/usr/bin/env bash
-# Re-pin ReCasaOS, with our open upstream PRs merged in.   Usage: nix/pins/update.sh [<root-rev>]
+# Re-pin ReCasaOS, with our open upstream PRs merged in.   Usage: nix/pins/update.sh [<install-rev>]
 #
-# - root = pin of record: <root-rev> or upstream main
-# - each component's base = rev in the root's release/components.lock.json
-# - component with open PRs (nix/pins/preview.json): base + PR branches merged in order
-#   → pushed as `recasanix-preview` to our fork → flake input = that head
-# - other components: flake input = base
-# - records base/head in preview.json; T7 (pin-drift) checks them
-# - PR already in base (merged upstream) → reported; drop it from preview.json
+# - pin of record: ReCasaOS/CasaOS-Install release/components.env at <install-rev> (tag or commit;
+#   default: latest release) → `<NAME>_COMMIT` per component
+# - CasaOS-Common (Go dependency, not a component): the version the root's go.mod requires at its pin
+# - component with open PRs (nix/pins/staging.json): base + PR branches merged in order
+#   → pushed as `recasanix-staging` to our fork → flake input = that head
+# - other components: flake input = upstream at base
+# - records base/head in staging.json; T7 (pin-drift) checks them
+# - PR already in base (merged upstream) → reported; drop it from staging.json
 # Needs: push access to the forks (SSH agent).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 repo_root=$PWD
-json=nix/pins/preview.json
+json=nix/pins/staging.json
 branch=$(jq -r .branch "$json")
 work=$(mktemp -d)
 trap '[ -e "$work/.keep" ] || rm -rf "$work"' EXIT
 
-pins() { jq -r '.nodes | to_entries[] | select(.key | test("^(recasaos|casaos-ui)")) | "\(.key) \(.value.locked.owner)/\(.value.locked.repo) \(.value.locked.rev)"' flake.lock; }
+pins() { jq -r '.nodes | to_entries[] | select(.key | test("^(recasaos|casaos-)")) | "\(.key) \(.value.locked.owner)/\(.value.locked.repo) \(.value.locked.rev)"' flake.lock; }
 before="$(pins)"
 
-# root rev → upstream lock file
-root_upstream=$(jq -r '.components.recasaos.upstream' "$json")
-git clone -q --filter=blob:none --no-checkout "https://github.com/$root_upstream" "$work/root"
-root_rev=${1:-$(git -C "$work/root" rev-parse origin/HEAD)}
-root_rev=$(git -C "$work/root" rev-parse "$root_rev^{commit}")
-lock=$(git -C "$work/root" show "$root_rev:release/components.lock.json")
-lock_rev() { jq -r --arg n "$1" '.components[] | select(.name == $n) | .source_revision' <<<"$lock"; }
-declare -A lock_name=(
-  [recasaos-gateway]=gateway [recasaos-user-service]=user-service [recasaos-app-management]=app-management
-  [recasaos-message-bus]=message-bus [casaos-ui]=administrative-ui
+# pin of record: CasaOS-Install at a release
+install_repo=ReCasaOS/CasaOS-Install
+git clone -q --filter=blob:none --no-checkout "https://github.com/$install_repo" "$work/install"
+install_rev=${1:-$(gh release view -R "$install_repo" --json tagName --jq .tagName)}
+install_rev=$(git -C "$work/install" rev-parse "$install_rev^{commit}")
+envfile=$(git -C "$work/install" show "$install_rev:release/components.env")
+env_commit() { sed -n "s/^$1_COMMIT=//p" <<<"$envfile"; }
+
+declare -A env_name=(
+  [recasaos]=CASAOS [recasaos-gateway]=CASAOS_GATEWAY [recasaos-user-service]=CASAOS_USER_SERVICE
+  [recasaos-app-management]=CASAOS_APP_MANAGEMENT [recasaos-message-bus]=CASAOS_MESSAGE_BUS [casaos-ui]=CASAOS_UI
+)
+declare -A upstream_repo=(
+  [recasaos]=ReCasaOS/CasaOS [recasaos-gateway]=ReCasaOS/CasaOS-Gateway [recasaos-user-service]=ReCasaOS/CasaOS-UserService
+  [recasaos-app-management]=ReCasaOS/CasaOS-AppManagement [recasaos-message-bus]=ReCasaOS/CasaOS-MessageBus
+  [casaos-ui]=ReCasaOS/CasaOS-UI [casaos-common]=ReCasaOS/CasaOS-Common
 )
 
-# preview: base + PRs → fork's preview branch
-preview() { # <input> <base>  → prints head
-  local input=$1 base=$2 upstream fork dir
-  upstream=$(jq -r --arg i "$input" '.components[$i].upstream' "$json")
+# CasaOS-Common: the version the pinned root requires
+root_commit=$(env_commit CASAOS)
+git clone -q --filter=blob:none --no-checkout "https://github.com/ReCasaOS/CasaOS" "$work/root"
+common_version=$(git -C "$work/root" show "$root_commit:go.mod" | awk '$1 == "github.com/ReCasaOS/CasaOS-Common" { print $2 }')
+common_commit=$(git ls-remote "https://github.com/ReCasaOS/CasaOS-Common" "refs/tags/$common_version^{}" "refs/tags/$common_version" | awk 'NR == 1 { print $1 }')
+[ -n "$common_commit" ] || {
+  echo "CasaOS-Common $common_version: no such tag" >&2
+  exit 1
+}
+
+base_of() { if [ "$1" = casaos-common ]; then echo "$common_commit"; else env_commit "${env_name[$1]}"; fi; }
+
+# staging: base + PRs → fork's staging branch
+staging() { # <input> <base>  → prints head
+  local input=$1 base=$2 fork dir
   fork=$(jq -r --arg i "$input" '.components[$i].fork' "$json")
   dir="$work/$input"
   git clone -q "https://github.com/$fork" "$dir"
-  git -C "$dir" remote add upstream "https://github.com/$upstream"
+  git -C "$dir" remote add upstream "https://github.com/${upstream_repo[$input]}"
   git -C "$dir" fetch -q upstream
   git -C "$dir" checkout -q -B "$branch" "$base"
   while read -r pr; do
@@ -49,7 +67,7 @@ preview() { # <input> <base>  → prints head
     fi
     # machine-made merge commits: unsigned
     git -C "$dir" -c user.name="$(git config user.name)" -c user.email="$(git config user.email)" -c commit.gpgsign=false \
-      merge -q --no-ff --no-edit -m "preview: merge $pr" "origin/$pr" >&2 || {
+      merge -q --no-ff --no-edit -m "staging: merge $pr" "origin/$pr" >&2 || {
       echo "  $input: merge of $pr failed (conflict?) — clone kept: $dir" >&2
       touch "$work/.keep"
       exit 1
@@ -59,17 +77,22 @@ preview() { # <input> <base>  → prints head
   git -C "$dir" rev-parse HEAD
 }
 
-overrides=()
-for input in $(jq -r '.components | keys[]' "$json") recasaos-gateway; do
-  if [ "$input" = recasaos ]; then base=$root_rev; else base=$(lock_rev "${lock_name[$input]}"); fi
+jq --arg r "$install_rev" --arg v "$common_version" '.install = $r | .common_version = $v' "$json" >"$json.new" && mv "$json.new" "$json"
+overrides=(--override-input recasaos-install "github:$install_repo/$install_rev")
+for input in "${!upstream_repo[@]}"; do
+  base=$(base_of "$input")
+  [[ $base =~ ^[0-9a-f]{40}$ ]] || {
+    echo "$input: no commit in the pin of record ('$base')" >&2
+    exit 1
+  }
   if jq -e --arg i "$input" '.components | has($i)' "$json" >/dev/null; then
-    echo "preview $input: base ${base:0:9}" >&2
-    head=$(preview "$input" "$base")
+    echo "staging $input: base ${base:0:9}" >&2
+    head=$(staging "$input" "$base")
     jq --arg i "$input" --arg b "$base" --arg h "$head" '.components[$i].base = $b | .components[$i].head = $h' \
       "$json" >"$json.new" && mv "$json.new" "$json"
     overrides+=(--override-input "$input" "github:$(jq -r --arg i "$input" '.components[$i].fork' "$json")/$head")
   else
-    overrides+=(--override-input "$input" "github:EdmundFu-233/ReCasaOS-Gateway/$base")
+    overrides+=(--override-input "$input" "github:${upstream_repo[$input]}/$base")
   fi
 done
 cd "$repo_root"

@@ -1,18 +1,18 @@
 # casaos-gateway — reference implementation of the Go-service recipe (task 1.1).
 {
+  lib,
   mkCasaosGo,
   components,
   src,
 }:
 mkCasaosGo {
   pname = "casaos-gateway";
-  # upstream: common/version.go
-  version = "0.4.8";
+  version = lib.removePrefix "v" components.recasaos-gateway.tag;
   inherit src;
-  vendorHash = "sha256-oVr1GrZac1uCDEs8+P1Y6gqir6UjaN+0RmPpioJg9F4=";
+  vendorHash = "sha256-rxIF9iSK6TCV+rS75xiHZjkQXo+VA4SbYRoRVC9gRJc=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-Gateway = "casaos-gateway";
   repo = components.recasaos-gateway.repo;
-  description = "ReCasaOS gateway: management listener, route registry and static UI server";
+  description = "ReCasaOS gateway: management listener, route registry, static UI server, optional TLS";
   mainProgram = "casaos-gateway";
 }

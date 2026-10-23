@@ -1,5 +1,5 @@
 # T14 — share accounts and share access through the real web UI (headless Chromium), on top of the
-# backend checked by smb-shares (T13). PRs ReCasaOS-UI#8, ReCasaOS-UI#9.
+# backend checked by smb-shares (T13).
 { pkgs, modules }:
 let
   python = pkgs.python3.withPackages (ps: [ ps.playwright ]);
@@ -68,7 +68,7 @@ pkgs.testers.runNixOSTest {
         "curl -s -X POST -H 'Content-Type: application/json' "
         "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
     ))
-    auth = "-H 'Authorization: Bearer " + login["data"]["token"]["access_token"] + "'"
+    auth = "-H 'Authorization: " + login["data"]["token"]["access_token"] + "'"
     shares = json.loads(machine.succeed(f"curl -s {auth} http://localhost/v1/samba/shares"))["data"]
     assert [(s["path"], s["username"]) for s in shares] == [("/DATA/Media", "carol")], shares
     machine.succeed("test \"$(stat -c '%U %a' /DATA/Media)\" = 'carol 770'")

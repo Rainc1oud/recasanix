@@ -1,4 +1,5 @@
 {
+  lib,
   mkCasaosGo,
   oapi-codegen-v1,
   components,
@@ -8,20 +9,19 @@
 # (task 3.1) supplies them through the unit's `path` (docker, docker-compose).
 mkCasaosGo {
   pname = "casaos-app-management";
-  # upstream: common/constants.go
-  version = "0.4.16";
+  version = lib.removePrefix "v" components.recasaos-app-management.tag;
   inherit src;
-  vendorHash = "sha256-P01D/KX2FAsJXvZrRXqc1rFyGvZJmzZ/6GuyKii1V2A=";
+  vendorHash = "sha256-yCbs50slPGdlV/QMCwxxUhndkY7+7ELBQr0ls1VG4Ys=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-AppManagement = "casaos-app-management";
   repo = components.recasaos-app-management.repo;
-  description = "ReCasaOS app management: Docker/compose app lifecycle and app store";
+  description = "ReCasaOS app management: Docker/compose app lifecycle, app store, image-update checks";
   mainProgram = "casaos-app-management";
 
   # Upstream gitignores `codegen/` and produces it with `go generate`, which downloads
-  # oapi-codegen@v1.12.4 and the message-bus OpenAPI spec from that repository's floating `main`
-  # branch. Here the generator is a pinned build tool and the spec comes from the *pinned*
-  # casaos-message-bus source, so the client always matches the message bus we ship.
+  # oapi-codegen@v1.12.4 and the message-bus OpenAPI spec from a floating URL. Here the generator is
+  # a pinned build tool and the spec comes from the *pinned* casaos-message-bus source, so the client
+  # always matches the message bus we ship.
   # postPatch also runs in the vendoring derivation (`go mod vendor` needs the generated package).
   nativeBuildInputs = [ oapi-codegen-v1 ];
   postPatch = ''

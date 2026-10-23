@@ -17,13 +17,13 @@ import (
 )
 
 // The gateway is the only entry point users have; a service is reachable once it registers routes
-// there. The fork's gateway lets the local stack do that with a per-boot service token that it
-// writes, owner-only, into the runtime directory. Such registrations are deliberately not persisted
-// and do not expire: their owner registers again whenever it starts — and, here, whenever the
-// gateway has forgotten them (it restarted).
+// there. The gateway lets the local stack do that from loopback with the per-boot internal secret it
+// writes, owner-only, into the runtime directory (`Authorization: Internal <secret>`). Such
+// registrations are deliberately not persisted and do not expire: their owner registers again
+// whenever it starts — and, here, whenever the gateway has forgotten them (it restarted).
 const (
 	managementURLFile = "management.url"
-	serviceTokenFile  = "gateway.token"
+	serviceTokenFile  = "internal.secret"
 	routesAPI         = "/v1/gateway/routes"
 	maxSmallFile      = 1 << 10
 	maxAPIResponse    = 64 << 10
@@ -77,7 +77,7 @@ func (g *gatewayClient) do(ctx context.Context, method, path string, body []byte
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Internal "+token)
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
