@@ -42,8 +42,11 @@ pkgs.testers.runNixOSTest {
       modules.storage
       modules.recasaos
     ];
-    services.recasaos.enable = true;
-    services.recasaos.imageModules = [ demo ];
+    services.recasaos = {
+      enable = true;
+      imageModules = [ demo ];
+      modules.virt.enable = false; # the demo alone (virt: T16)
+    };
     recasanix.appliance.admin.initialHashedPassword = "!";
     virtualisation.memorySize = 2048;
 
@@ -67,11 +70,18 @@ pkgs.testers.runNixOSTest {
     machine.succeed("printf 'admin\\nrecasanix-admin-pass-1\\n' | recasanix-user-admin bootstrap")
     machine.wait_for_unit("casaos-user-service.service")
 
+    # one login (the user service rate-limits logins; the polls below would trip it); valid for hours,
+    # again after a reboot only if the key changed (it does not: hot state)
+    _token = []
+
     def token():
-        return json.loads(machine.succeed(
+        if _token:
+            return _token[0]
+        _token.append(json.loads(machine.succeed(
             "curl -s -X POST -H 'Content-Type: application/json' "
             "-d '{\"username\":\"admin\",\"password\":\"recasanix-admin-pass-1\"}' http://localhost/v1/users/login"
-        ))["data"]["token"]["access_token"]
+        ))["data"]["token"]["access_token"])
+        return _token[0]
 
     def api(method, path, body=None):
         data = f"-H 'Content-Type: application/json' -d '{json.dumps(body)}'" if body is not None else ""

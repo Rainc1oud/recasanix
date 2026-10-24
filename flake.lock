@@ -11,20 +11,19 @@
         "type": "github"
       },
       "original": {
-        "owner": "ppenguin",
-        "ref": "recasanix-staging",
-        "repo": "CasaOS-Common-RCOS",
+        "owner": "ReCasaOS",
+        "repo": "CasaOS-Common",
         "type": "github"
       }
     },
     "casaos-ui": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857796,
+        "lastModified": 1792859384,
         "narHash": "sha256-vzfEzPBt7XVXE31GwChHQMOh1/yM6SHOyU+R4Q7qsbQ=",
         "owner": "ppenguin",
         "repo": "CasaOS-UI-RCOS",
-        "rev": "ee860663353fff3dca05891f851ff60f76e54459",
+        "rev": "5c5d236bf654b5be666f5667809840f74b9a8f85",
         "type": "github"
       },
       "original": {
@@ -108,11 +107,11 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857787,
+        "lastModified": 1792859263,
         "narHash": "sha256-6QyR3dOuFGX63EkcC852eWOyBl6SdzviLVixgB10ev0=",
         "owner": "ppenguin",
         "repo": "CasaOS-RCOS",
-        "rev": "c389b6a1222369be1a3bc72a9eb69c264ea7bd1f",
+        "rev": "3a2004733e004e3451f207dd65aab4b55fa1d38b",
         "type": "github"
       },
       "original": {
@@ -125,11 +124,11 @@
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857803,
+        "lastModified": 1792859391,
         "narHash": "sha256-WGL1ogfEXu61QO4FZySpYW3k/iKs5t6GU6xdPYTcT24=",
         "owner": "ppenguin",
         "repo": "CasaOS-AppManagement-RCOS",
-        "rev": "d04ca6027dc96c76f1eeb014ef9a9929e1f17fd5",
+        "rev": "e84896c414decf2f06c90706671ca859c2ac4d5f",
         "type": "github"
       },
       "original": {
@@ -142,11 +141,11 @@
     "recasaos-gateway": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857806,
+        "lastModified": 1792859393,
         "narHash": "sha256-58BnUxXcCC+vlt1/ZzWNEAEAVL+F3w+5igt4/0xS1VE=",
         "owner": "ppenguin",
         "repo": "CasaOS-Gateway-RCOS",
-        "rev": "5c457b4cd07d6abad1b1fea0c57b12c8c12e4fc0",
+        "rev": "b3ed51d25da02ef477efe2fea42c4d246a03e402",
         "type": "github"
       },
       "original": {
@@ -175,11 +174,11 @@
     "recasaos-message-bus": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857799,
+        "lastModified": 1792859387,
         "narHash": "sha256-1mjtz0vAdirGLIT0yxfnK53r494G9lykcy6SmSQ8Nok=",
         "owner": "ppenguin",
         "repo": "CasaOS-MessageBus-RCOS",
-        "rev": "42fff4802d40ad0b327e16af3897e16c0c44d835",
+        "rev": "9fd3582c5046f4174167a7c484224abaf7fddd47",
         "type": "github"
       },
       "original": {
@@ -192,17 +191,34 @@
     "recasaos-user-service": {
       "flake": false,
       "locked": {
-        "lastModified": 1792857791,
+        "lastModified": 1792859266,
         "narHash": "sha256-EXnbSE/iLeZ+Ix6hgULVjqF46OwyM+7xMrGoSO68YsM=",
         "owner": "ppenguin",
         "repo": "CasaOS-UserService-RCOS",
-        "rev": "468153cfb4510e89f6cb9250cd1e177250454e5f",
+        "rev": "823d9ce2c954207924c25e26a6b48bba3b08e856",
         "type": "github"
       },
       "original": {
         "owner": "ppenguin",
         "ref": "recasanix-staging",
         "repo": "CasaOS-UserService-RCOS",
+        "type": "github"
+      }
+    },
+    "recasaos-virt-management": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792859397,
+        "narHash": "sha256-iVHiP4irVSmY9gNJgCfHSx7SdyV0g5CBq45JzuNQXps=",
+        "owner": "ppenguin",
+        "repo": "CasaOS-VirtManagement-RCOS",
+        "rev": "9e12a6624fb3eeded09b9a0790a81cbe7d275894",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ppenguin",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-VirtManagement-RCOS",
         "type": "github"
       }
     },
@@ -218,7 +234,8 @@
         "recasaos-gateway": "recasaos-gateway",
         "recasaos-install": "recasaos-install",
         "recasaos-message-bus": "recasaos-message-bus",
-        "recasaos-user-service": "recasaos-user-service"
+        "recasaos-user-service": "recasaos-user-service",
+        "recasaos-virt-management": "recasaos-virt-management"
       }
     }
   },

@@ -212,6 +212,8 @@ let
     };
 in
 {
+  imports = [ ./recasaos-modules.nix ];
+
   options.services.recasaos = {
     enable = lib.mkEnableOption "the ReCasaOS management layer (web UI, files, users, app management)";
 

@@ -97,12 +97,15 @@ pkgs.testers.runNixOSTest {
         code = api(method, path)
         assert code in ("404", "405"), f"{method} {path} -> {code}"
 
-    # modules: the image's (image provider), from the catalogue in the store: none shipped, nothing
-    # to install, and no `casaos module` (apt, downloads) behind the routes
+    # modules: the image's (image provider), from the catalogue in the store: virt (modules.env pin,
+    # in the image, off), nothing else; no `casaos module` (apt, downloads) behind the routes
     mods = json.loads(machine.succeed(f"curl -s -H 'Authorization: {token}' http://localhost/v1/sys/modules"))
-    assert mods["data"]["catalogue"]["ok"] is True and mods["data"]["modules"] == [], mods
+    assert mods["data"]["catalogue"]["ok"] is True, mods
+    assert [(m["name"], m["installed"]) for m in mods["data"]["modules"]] == [("virt", None)], mods
     plan = json.loads(machine.succeed(f"curl -s -X POST -H 'Authorization: {token}' http://localhost/v1/sys/modules/virt/plan"))
-    assert plan["data"]["refused"] == "catalogue" and plan["data"]["packages"]["to_install"] == [], plan
+    assert not plan["data"]["refused"] and plan["data"]["packages"]["to_install"] == [], plan
+    plan = json.loads(machine.succeed(f"curl -s -X POST -H 'Authorization: {token}' http://localhost/v1/sys/modules/other/plan"))
+    assert plan["data"]["refused"] == "catalogue", plan
 
     # the file API stays in the data roots (`[file] ManagementRoots`): no /etc, no state partition
     for path in ["/etc/shadow", "/var/lib/casaos/db", "/DATA/../etc/passwd"]:

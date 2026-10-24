@@ -34,6 +34,14 @@ let
     options = [ "bind" ];
   };
 
+  # libvirt's definitions (VMs, networks, storage pools) and its qemu state: hot state, made at runtime
+  # by the virtual-machines module. The disks and ISOs themselves are on the data pool (/DATA/VM).
+  libvirtBind."/var/lib/libvirt" = {
+    device = "${mp}/libvirt";
+    fsType = "none";
+    options = [ "bind" ];
+  };
+
   # The journal is the log of record (the services tee their logs to stdout); persisted so a support case
   # still has the logs from before an image update. Size capped in appliance.nix.
   journalBind."/var/log/journal" = {
@@ -111,6 +119,11 @@ in
         virtualisation.fileSystems = lib.mkIf config.services.samba.enable sambaBind;
       })
 
+      (lib.mkIf config.virtualisation.libvirtd.enable { fileSystems = libvirtBind; })
+      (lib.optionalAttrs (options ? virtualisation.fileSystems) {
+        virtualisation.fileSystems = lib.mkIf config.virtualisation.libvirtd.enable libvirtBind;
+      })
+
       { fileSystems = journalBind; }
       (lib.optionalAttrs (options ? virtualisation.fileSystems) {
         virtualisation.fileSystems = journalBind;
@@ -149,7 +162,7 @@ in
             deps = [ "specialfs" ];
             text = ''
               # (the bind-mount sources of the ReCasaOS directories must exist before local-fs mounts them)
-              mkdir -p ${mp}/accounts ${mp}/nixos ${mp}/samba ${mp}/journal ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
+              mkdir -p ${mp}/accounts ${mp}/nixos ${mp}/samba ${mp}/journal ${mp}/libvirt ${config.services.recasaos.dataDir} ${config.services.recasaos.configDir}
               if [ ! -L /var/lib/nixos ]; then
                 if [ -d /var/lib/nixos ] && [ -z "$(ls -A ${mp}/nixos)" ]; then
                   cp -a /var/lib/nixos/. ${mp}/nixos/

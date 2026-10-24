@@ -24,9 +24,9 @@
       url = "github:ppenguin/CasaOS-RCOS/recasanix-staging";
       flake = false;
     };
-    # Go dependency of every service (go.mod), carried as a source while our fixes are unreleased
+    # Go dependency of every service (go.mod); our staging only while it has open PRs of ours
     casaos-common = {
-      url = "github:ppenguin/CasaOS-Common-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-Common";
       flake = false;
     };
     recasaos-gateway = {
@@ -43,6 +43,11 @@
     };
     recasaos-message-bus = {
       url = "github:ppenguin/CasaOS-MessageBus-RCOS/recasanix-staging";
+      flake = false;
+    };
+    # Modules (CasaOS-Install release/modules.env): built into the image, enabled per box
+    recasaos-virt-management = {
+      url = "github:ppenguin/CasaOS-VirtManagement-RCOS/recasanix-staging";
       flake = false;
     };
     # UI: ReCasaOS/CasaOS-UI, the Vue 3 dashboard (AGENTS.md §2)

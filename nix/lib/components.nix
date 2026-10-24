@@ -15,14 +15,50 @@ let
   stagingOf = input: staging.${input} or null;
 
   # KEY=VALUE lines; comments and blanks ignored
-  envFile = builtins.readFile "${inputs.recasaos-install}/release/components.env";
-  env = lib.listToAttrs (
-    map (line: lib.nameValuePair (lib.head line) (lib.concatStringsSep "=" (lib.tail line))) (
-      map (lib.splitString "=") (
-        lib.filter (line: line != "" && !lib.hasPrefix "#" line) (lib.splitString "\n" envFile)
+  parseEnv =
+    file:
+    lib.listToAttrs (
+      map (line: lib.nameValuePair (lib.head line) (lib.concatStringsSep "=" (lib.tail line))) (
+        map (lib.splitString "=") (
+          lib.filter (line: line != "" && !lib.hasPrefix "#" line) (
+            lib.splitString "\n" (builtins.readFile file)
+          )
+        )
       )
-    )
+    );
+  # the base system (components.env) and the optional modules of the release (modules.env:
+  # MODULE_<NAME>_{TAG,COMMIT,COMPONENT,TIER}), one key space
+  modulesEnv = "${inputs.recasaos-install}/release/modules.env";
+  env =
+    parseEnv "${inputs.recasaos-install}/release/components.env"
+    // lib.optionalAttrs (builtins.pathExists modulesEnv) (parseEnv modulesEnv);
+
+  # module of the release (`<NAME>` of modules.env) → its flake input; one the release names that
+  # has none here is reported by T7
+  moduleInputs = {
+    VIRT = "recasaos-virt-management";
+  };
+  releaseModules = map (k: lib.removeSuffix "_TAG" (lib.removePrefix "MODULE_" k)) (
+    lib.filter (k: lib.hasPrefix "MODULE_" k && lib.hasSuffix "_TAG" k) (lib.attrNames env)
   );
+
+  # a module: a component, plus what the catalogue entry of the image takes from modules.env and
+  # from the module's own module.json at the pinned commit
+  fromModule =
+    input: name:
+    let
+      envName = "MODULE_${name}";
+      c = fromEnv input envName "ReCasaOS/${env."${envName}_COMPONENT"}";
+    in
+    c
+    // {
+      module = {
+        name = lib.toLower (lib.replaceStrings [ "_" ] [ "-" ] name);
+        component = env."${envName}_COMPONENT";
+        tier = env."${envName}_TIER";
+        manifest = lib.importJSON "${c.src}/module.json";
+      };
+    };
 
   fromEnv = input: envName: repo: {
     inherit envName repo;
@@ -37,6 +73,14 @@ in
 {
   # release of the distribution the pins come from (v<…>)
   release = env.CASAOS_RELEASE_TAG;
+
+  # modules.env names (VIRT, …) and the ones with an input here (T7: the first ⊆ the second)
+  modules = {
+    inRelease = releaseModules;
+    known = lib.attrNames moduleInputs;
+  };
+
+  recasaos-virt-management = fromModule "recasaos-virt-management" "VIRT";
 
   recasaos = fromEnv "recasaos" "CASAOS" "ReCasaOS/CasaOS";
   recasaos-gateway = fromEnv "recasaos-gateway" "CASAOS_GATEWAY" "ReCasaOS/CasaOS-Gateway";

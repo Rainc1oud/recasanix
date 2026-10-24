@@ -47,7 +47,7 @@ These were settled with the product owner. If a task seems to require changing o
 | Storage (data pool) | **btrfs** (in-tree, native RAID1 mirror, snapshots). ZFS stays a documented, commented-out alternative that must remain cheap to test. |
 | Storage manager | The UI's storage widget is served by **`recasanix-storage`** (`services/recasanix-storage`, our own Go code): the routes and shapes of upstream's CasaOS-LocalStorage, which is **not** adopted (host-management pattern, ext4-only, `bash -c` with request data, rclone). It **can create storage** on a blank disk (JBOD: btrfs single profile, no partitioning) — formatting/removing an *existing* storage and merging remain refused with 501. Every write re-validates its target against a fresh disk listing; nothing from a request reaches a command unchecked. The rest (mirror as a UI choice, replace, degraded, scrub) is the Phase 6 storage layer, on the same routes. See [docs/storage-manager.md](./docs/storage-manager.md). |
 | Container runtime | **Docker** (`virtualisation.docker`). Podman re-evaluation is a later phase task, not now. |
-| ReCasaOS pinning | Pin of record: `ReCasaOS/CasaOS-Install` `release/components.env` at a release (tag + commit per component; flake input `recasaos-install`). Component **with open upstream PRs** (ours): flake input = our fork's `recasanix-staging` branch = pin + PR branches merged in order (`nix/pins/staging.json`) → post-merge preview via the normal source mechanism. Others: upstream at the pinned commit. CasaOS-Common (Go dependency): only while it has open PRs of ours, its staging replaces every service's go.mod version (`go mod edit -replace`); otherwise each go.mod as upstream has it. `nix/pins/update.sh [<install-rev>]` = only way to move pins (rebuilds staging, pushes, locks). T7: pin == staging base (or input), input == staging head, root still requires the recorded Common version. Merged PR → drop from `staging.json`. (EF scheme, owner decision 2026-10-07, carried over.) |
+| ReCasaOS pinning | Pin of record: `ReCasaOS/CasaOS-Install` `release/components.env` + `release/modules.env` at a release (tag + commit per component and per module; flake input `recasaos-install`). Modules (today `virt`, CasaOS-VirtManagement) are built into the image like components and enabled per box from the Modules page (core image provider: flag file + unit start; `nix/modules/recasaos-modules.nix`); their Debian package lists are replaced by nixpkgs equivalents there. Component **with open upstream PRs** (ours): flake input = our fork's `recasanix-staging` branch = pin + PR branches merged in order (`nix/pins/staging.json`) → post-merge preview via the normal source mechanism. Others: upstream at the pinned commit. CasaOS-Common (Go dependency): only while it has open PRs of ours, its staging replaces every service's go.mod version (`go mod edit -replace`); otherwise each go.mod as upstream has it. `nix/pins/update.sh [<install-rev>]` = only way to move pins (rebuilds staging, pushes, locks). T7: pin == staging base (or input), input == staging head, root still requires the recorded Common version. Merged PR → drop from `staging.json`. (EF scheme, owner decision 2026-10-07, carried over.) |
 | Web UI source | `ReCasaOS/CasaOS-UI` (Vue 3, dark theme; Apache-2.0 + NOTICE, residual gap in §6). |
 | CI | Local `nix flake check` for now. CI pipeline + binary cache is a later phase. |
 | Cold vs hot state | **Nix owns the cold layer**: packages, service enablement, base network and storage *layout*, container-runtime setup, drivers, firewall, boot — infrequent, fleet-wide, atomic. **Hot state is imperative and is not routed through Nix**: users (ordinary useradd/PAM-style, `users.mutableUsers = true`), Samba/NFS shares, btrfs/ZFS pool and dataset topology (runtime `mkfs.btrfs`/`btrfs`/`zpool`/`zfs`; no NAS OS declares pools as system config), installed apps/containers, client network config. The CasaOS services already work the TrueNAS-middlewared way — structured records in their own databases, a generator step templates config files (e.g. `smb.casa.conf`, validated with `testparm`) and reloads the service — so we adopt that pattern instead of fighting it. |
@@ -70,6 +70,7 @@ nix/
     recasaos-user-service/
     recasaos-app-management/
     recasaos-message-bus/
+    recasaos-virt-management/ # module (modules.env): virtual machines (libvirt/QEMU)
     casaos-ui/             #   pnpm/vue static UI
     casaos-sysroot/        #   merged share/casaos-sysroot of all six components
     oapi-codegen-v1/       #   build tool: the generator version upstream's go:generate pins
@@ -78,6 +79,7 @@ nix/
     default.nix            #   overlay assembling the above
   modules/                 # NixOS modules
     recasaos.nix           #   services.recasaos.* — units, configs, state dirs
+    recasaos-modules.nix   #   modules of the image (virt): units, libvirtd, catalogue entries
     storage.nix            #   btrfs data-pool convention (+ commented ZFS alternative)
     state.nix              #   hot-state filesystem: accounts, ReCasaOS data/config, ssh host keys
     docker.nix             #   Docker on the data pool (skipped without a pool)
@@ -106,7 +108,8 @@ pinned set is `release/components.env` in `CasaOS-Install` (one per distribution
 | Message bus | `CasaOS-MessageBus` | `github.com/ReCasaOS/CasaOS-MessageBus` | `casaos-message-bus` | `/etc/casaos/message-bus.conf` |
 | Web UI | `CasaOS-UI` (Vue 3) | — (pnpm / vue-cli 5) | static files | served from `/var/lib/casaos/www` |
 | Shared library | `CasaOS-Common` | `github.com/ReCasaOS/CasaOS-Common` | — (Go dependency) | — |
-| Not shipped | `CasaOS-LocalStorage` (→ `recasanix-storage`), `CasaOS-VirtManagement` (module), `CasaOS-Install` (pin of record only), `_appstore` (mirror) | | | |
+| Module (in the image, off until enabled) | `CasaOS-VirtManagement` | `github.com/ReCasaOS/CasaOS-VirtManagement` | `casaos-virt-management` | `/etc/casaos/virt-management.conf` |
+| Not shipped | `CasaOS-LocalStorage` (→ `recasanix-storage`), `CasaOS-Install` (pin of record only), `_appstore` (mirror) | | | |
 
 Service auth: per-boot `/run/casaos/internal.secret` (gateway writes it, root-only); in-stack callers
 send `Authorization: Internal <secret>` from loopback. Users: the bare access token in

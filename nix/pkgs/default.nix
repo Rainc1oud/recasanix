@@ -28,4 +28,6 @@ in
   casaos-message-bus = goService ./recasaos-message-bus "recasaos-message-bus";
   casaos-user-service = goService ./recasaos-user-service "recasaos-user-service";
   casaos-app-management = goService ./recasaos-app-management "recasaos-app-management";
+  # modules (release/modules.env)
+  casaos-virt-management = goService ./recasaos-virt-management "recasaos-virt-management";
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Re-pin ReCasaOS, with our open upstream PRs merged in.   Usage: nix/pins/update.sh [<install-rev>]
 #
-# - pin of record: ReCasaOS/CasaOS-Install release/components.env at <install-rev> (tag or commit;
-#   default: latest release) → `<NAME>_COMMIT` per component
+# - pin of record: ReCasaOS/CasaOS-Install release/components.env + release/modules.env at <install-rev>
+#   (tag or commit; default: latest release) → `<NAME>_COMMIT` per component, `MODULE_<NAME>_COMMIT` per module
 # - CasaOS-Common (Go dependency, not a component): the version the root's go.mod requires at its pin
 # - component with open PRs (nix/pins/staging.json): base + PR branches merged in order
 #   → pushed as `recasanix-staging` to our fork → flake input = that head
@@ -26,18 +26,29 @@ install_repo=ReCasaOS/CasaOS-Install
 git clone -q --filter=blob:none --no-checkout "https://github.com/$install_repo" "$work/install"
 install_rev=${1:-$(gh release view -R "$install_repo" --json tagName --jq .tagName)}
 install_rev=$(git -C "$work/install" rev-parse "$install_rev^{commit}")
+# components.env (the base system) and modules.env (the optional modules, MODULE_<NAME>_*), one key space
 envfile=$(git -C "$work/install" show "$install_rev:release/components.env")
+envfile+=$'\n'$(git -C "$work/install" show "$install_rev:release/modules.env" 2>/dev/null || true)
 env_commit() { sed -n "s/^$1_COMMIT=//p" <<<"$envfile"; }
 
 declare -A env_name=(
   [recasaos]=CASAOS [recasaos-gateway]=CASAOS_GATEWAY [recasaos-user-service]=CASAOS_USER_SERVICE
   [recasaos-app-management]=CASAOS_APP_MANAGEMENT [recasaos-message-bus]=CASAOS_MESSAGE_BUS [casaos-ui]=CASAOS_UI
+  [recasaos-virt-management]=MODULE_VIRT
 )
 declare -A upstream_repo=(
   [recasaos]=ReCasaOS/CasaOS [recasaos-gateway]=ReCasaOS/CasaOS-Gateway [recasaos-user-service]=ReCasaOS/CasaOS-UserService
   [recasaos-app-management]=ReCasaOS/CasaOS-AppManagement [recasaos-message-bus]=ReCasaOS/CasaOS-MessageBus
   [casaos-ui]=ReCasaOS/CasaOS-UI [casaos-common]=ReCasaOS/CasaOS-Common
+  [recasaos-virt-management]=ReCasaOS/CasaOS-VirtManagement
 )
+# every module the release names needs an input (nix/lib/components.nix moduleInputs, flake.nix)
+for m in $(sed -n 's/^MODULE_\([A-Z0-9_]*\)_TAG=.*/\1/p' <<<"$envfile"); do
+  printf '%s\n' "${env_name[@]}" | grep -qx "MODULE_$m" || {
+    echo "modules.env names MODULE_$m: add its input (flake.nix, components.nix moduleInputs, update.sh env_name)" >&2
+    exit 1
+  }
+done
 
 # CasaOS-Common: the version the pinned root requires
 root_commit=$(env_commit CASAOS)

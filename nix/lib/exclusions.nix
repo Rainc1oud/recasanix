@@ -219,6 +219,38 @@ rec {
         caller = "n/a";
       }
     ];
+    # a module (release/modules.env): built into the image, enabled per box (CasaOS image provider)
+    casaos-virt-management = [
+      {
+        path = "build/sysroot/usr/lib/systemd/system/casaos-virt-management.service";
+        kind = "path";
+        why = "Upstream's unit, enabled (`systemctl enable --now`) by the module assistant on install: on an image /etc is read-only and enablement is per box.";
+        replacedBy = "systemd.services.casaos-virt-management (nix/modules/recasaos-modules.nix): ConditionPathExists=/var/lib/casaos/modules/virt.enabled, the flag the core's image provider writes; path = headless QEMU (qemu-img) + iptables. T16.";
+        caller = "n/a — never loaded";
+      }
+      {
+        path = "module.json: packages (qemu-utils, qemu-system-*, ovmf, libvirt-daemon-system, libvirt-clients, dnsmasq-base)";
+        kind = "finding";
+        why = "Debian packages the module assistant installs with apt at install time.";
+        replacedBy = "nixpkgs equivalents in the image: virtualisation.libvirtd (libvirt without Xen/ZFS, socket-activated, not started at boot), QEMU host-CPU-only headless (VNC, OVMF, libusb for USB passthrough). Versions are nixpkgs', not Debian's.";
+        caller = "n/a";
+      }
+      {
+        path = "pkg/firewall: iptables chains CASAOS-VM, CASAOS-VM-POST, CASAOS-VM-DNAT; /proc/sys/net/ipv4/ip_forward";
+        kind = "finding";
+        why = "The module writes its VM network's firewall itself at runtime (iptables-restore --noflush, jumps from DOCKER-USER/FORWARD, POSTROUTING, PREROUTING/OUTPUT) and turns on IPv4 forwarding: host networking changed by a service, as Docker does.";
+        replacedBy = "Accepted (hot state, only while the module is enabled; its own chains, nothing else touched). The NixOS firewall (iptables backend) keeps INPUT; port forwards to VMs are the owner's choice in the module's UI.";
+        caller = "yes — the VM network page (port forwards)";
+      }
+      {
+        path = "pkg/hostusb, service/usb.go: USB passthrough (/sys/bus/usb/devices)";
+        kind = "finding";
+        why = "Hands a host USB device to a VM (libvirt hostdev).";
+        replacedBy = "Accepted: the owner's choice per VM; the module marks a device in use (a disk with something mounted, a network interface) and hubs are not offered (pkg/hostusb).";
+        caller = "yes — VM settings, USB";
+      }
+    ];
+
     casaos-ui = [
       {
         path = "src/components/Apps/AppSection.vue: 'From a git repository…'";

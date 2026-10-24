@@ -40,6 +40,8 @@ in
   unit-casaos-message-bus = goUnit pkgs.casaos-message-bus { };
   unit-recasanix-storage = goUnit pkgs.recasanix-storage { };
   unit-casaos-user-service = goUnit pkgs.casaos-user-service { };
+  # a module (release/modules.env)
+  unit-casaos-virt-management = goUnit pkgs.casaos-virt-management { };
 
   unit-casaos-app-management = goUnit pkgs.casaos-app-management {
     # git-deployed apps: the tests drive a real git (and ssh for deploy keys) on local repositories
