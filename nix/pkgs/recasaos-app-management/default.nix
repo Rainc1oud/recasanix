@@ -11,7 +11,7 @@ mkCasaosGo {
   pname = "casaos-app-management";
   version = lib.removePrefix "v" components.recasaos-app-management.tag;
   inherit src;
-  vendorHash = "sha256-yCbs50slPGdlV/QMCwxxUhndkY7+7ELBQr0ls1VG4Ys=";
+  vendorHash = "sha256-swrAhtjUkB3YXrbLVWjry1UpdJkKQ154XAV+VgF2i3Y=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-AppManagement = "casaos-app-management";
   repo = components.recasaos-app-management.repo;

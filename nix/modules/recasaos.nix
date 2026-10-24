@@ -74,6 +74,16 @@ let
       };
     };
 
+  # The modules of the image ([server] ModuleCatalogue, image provider of the core): none shipped
+  # yet. A module joins with an entry (`source: image`) here and its unit in the image, started at
+  # boot only where enabled (ConditionPathExists=/var/lib/casaos/modules/<name>.enabled).
+  moduleCatalogue = pkgs.writeText "recasanix-module-catalogue.json" (
+    builtins.toJSON {
+      schema = 1;
+      modules = [ ];
+    }
+  );
+
   stateInit = pkgs.writeShellApplication {
     name = "recasanix-state-init";
     runtimeInputs = [
@@ -97,12 +107,14 @@ let
       seed ${sysroot}/etc/casaos/casaos.conf.sample "$config/casaos.conf"
       # VENDOR-owned keys in the hot files, enforced on every boot, the rest of each file untouched:
       # - Nix owns smb.conf → the root service manages only the shares fragment (include-only mode)
-      # - the image owns updates, packages, OS upgrade, modules → the core offers none of them
+      # - the image owns updates, packages, OS upgrade → the core offers none of them; modules are
+      #   the image's (image provider, catalogue in the store)
       # - the first administrator is created on the machine (recasanix-user-admin), never over the web
       crudini --set "$config/casaos.conf" server SambaMainConfig ${
         if cfg.smb.enable then "external" else "managed"
       }
       crudini --set "$config/casaos.conf" server ImageManaged true
+      crudini --set "$config/casaos.conf" server ModuleCatalogue ${moduleCatalogue}
       # the file API stays in the data roots (it runs as root): no /etc, no state partition
       crudini --set "$config/casaos.conf" file ManagementRoots ${lib.concatStringsSep "," cfg.fileRoots}
       chmod 0600 "$config/casaos.conf"

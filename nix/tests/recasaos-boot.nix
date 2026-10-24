@@ -84,7 +84,7 @@ pkgs.testers.runNixOSTest {
     assert version["data"]["image_managed"] is True and version["data"]["current_version"], version
 
     # host management is absent (`[server] ImageManaged`, guardrail): OS upgrade, self-update,
-    # automatic updates, apt/Docker packages, modules, self-kill
+    # automatic updates, apt/Docker packages, self-kill
     for method, path in [
         ("GET", "/v1/sys/os"),
         ("POST", "/v1/sys/os/upgrade/start"),
@@ -92,11 +92,17 @@ pkgs.testers.runNixOSTest {
         ("GET", "/v1/sys/autoupdate"),
         ("GET", "/v1/sys/packages"),
         ("POST", "/v1/sys/docker/update"),
-        ("GET", "/v1/sys/modules"),
         ("POST", "/v1/sys/stop"),
     ]:
         code = api(method, path)
         assert code in ("404", "405"), f"{method} {path} -> {code}"
+
+    # modules: the image's (image provider), from the catalogue in the store: none shipped, nothing
+    # to install, and no `casaos module` (apt, downloads) behind the routes
+    mods = json.loads(machine.succeed(f"curl -s -H 'Authorization: {token}' http://localhost/v1/sys/modules"))
+    assert mods["data"]["catalogue"]["ok"] is True and mods["data"]["modules"] == [], mods
+    plan = json.loads(machine.succeed(f"curl -s -X POST -H 'Authorization: {token}' http://localhost/v1/sys/modules/virt/plan"))
+    assert plan["data"]["refused"] == "catalogue" and plan["data"]["packages"]["to_install"] == [], plan
 
     # the file API stays in the data roots (`[file] ManagementRoots`): no /etc, no state partition
     for path in ["/etc/shadow", "/var/lib/casaos/db", "/DATA/../etc/passwd"]:

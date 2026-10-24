@@ -9,7 +9,7 @@ mkCasaosGo {
   pname = "casaos-user-service";
   version = lib.removePrefix "v" components.recasaos-user-service.tag;
   inherit src;
-  vendorHash = "sha256-rLGcsOr+G7cUJz+lK38IzDRQlxdjQB7Ci3nUZvH7fFw=";
+  vendorHash = "sha256-V+QKM6Uhs9qgeQf/CDfF4c/Ny15uBbLNIDNw7X/SaEc=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-UserService = "casaos-user-service";
   repo = components.recasaos-user-service.repo;

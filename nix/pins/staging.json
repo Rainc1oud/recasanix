@@ -6,22 +6,13 @@
       "fork": "ppenguin/CasaOS-RCOS",
       "prs": [
         "fix/samba-reload",
-        "feat/nixos-host",
+        "feat/samba-include-only",
+        "feat/image-managed",
         "feat/bearer-authorization",
         "feat/file-roots"
       ],
-      "base": "c0404d8d8f3ef2b60e978274df88d09669f12512",
-      "head": "bc28daa9777aa8b5eb6419311378d7a454989c39"
-    },
-    "casaos-common": {
-      "upstream": "ReCasaOS/CasaOS-Common",
-      "fork": "ppenguin/CasaOS-Common-RCOS",
-      "prs": [
-        "fix/bash-from-path",
-        "feat/bearer-authorization"
-      ],
-      "base": "30f47536a9c42e8f5ad240f696748e13ff2e8063",
-      "head": "6bb8fd46a750fa253daeb041564c383035138539"
+      "base": "4fb1569404656ad3b541d5a6e930968703be9c6b",
+      "head": "dd6d00c7e0c72391d6565e70186b83360d293ffc"
     },
     "recasaos-message-bus": {
       "upstream": "ReCasaOS/CasaOS-MessageBus",
@@ -31,27 +22,27 @@
         "feat/bearer-authorization"
       ],
       "base": "5249d6443ae55bc6d4e9ccb5f88a49ffddabee1e",
-      "head": "57fec9e660015c68500d7f9fb8c303e9ad1ea8ea"
+      "head": "ad67cf23ff49ce427513af45e62c65555b50897a"
     },
     "recasaos-user-service": {
       "upstream": "ReCasaOS/CasaOS-UserService",
       "fork": "ppenguin/CasaOS-UserService-RCOS",
       "prs": [
-        "feat/local-first-admin",
+        "feat/first-admin-local",
         "feat/bearer-authorization"
       ],
-      "base": "576c2a05365f24b55f117c65dc901f118d719809",
-      "head": "fe5369c8b1ed8820de90df4f5ca0cd732713278d"
+      "base": "8873ee87321fe6de3288d417e686ccda8897fc9a",
+      "head": "d7179d5ecc81aa78566cc4826835f69ff0830d02"
     },
     "casaos-ui": {
       "upstream": "ReCasaOS/CasaOS-UI",
       "fork": "ppenguin/CasaOS-UI-RCOS",
       "prs": [
         "fix/storage-finally-app-grid",
-        "feat/image-managed-host"
+        "feat/image-managed-ui"
       ],
-      "base": "fb3179cfede5d0f5c8d1764178143370b99c9d6b",
-      "head": "922b7d40aeaae7445f75b1924f56ce672f392fbc"
+      "base": "0f710a26bcf619db281146867944845bbe1ca2ac",
+      "head": "aca3fa8d89d511c721fd00ffca4ebb672352d3af"
     },
     "recasaos-gateway": {
       "upstream": "ReCasaOS/CasaOS-Gateway",
@@ -60,7 +51,7 @@
         "feat/bearer-authorization"
       ],
       "base": "5434b2121d1940c76b1386befbd2039ab63b31c4",
-      "head": "76be85227566f5e803f29c63ffa2196182dabdd5"
+      "head": "e030a04b389e89d707d06bdef42d8751452e79fe"
     },
     "recasaos-app-management": {
       "upstream": "ReCasaOS/CasaOS-AppManagement",
@@ -69,9 +60,9 @@
         "feat/bearer-authorization"
       ],
       "base": "095cc63e6f6f5a965315f4270e6c24854767cf28",
-      "head": "600e29e4b9efab6214a8183cc756291f1b111400"
+      "head": "d50ec15e3def633d9c64337d3b01798078703592"
     }
   },
-  "install": "53674be97f87639672fc5307dac09609a99940c1",
-  "common_version": "v0.4.30"
+  "install": "ed12691268a8f35792b55a256a9107f6d6038e75",
+  "common_version": "v0.4.31"
 }

@@ -81,7 +81,7 @@ rec {
         kind = "pr";
         why = "Not host management — security: an empty box hands a register key to anyone asking, so the first visitor on the LAN becomes administrator.";
         replacedBy = "`[app] FirstAdmin = local` (set by recasanix-state-init): no key, register → 403; first administrator via `casaos-user-service -bootstrap-admin` with systemd credentials (recasanix-user-admin bootstrap). `-ru` (reset-password) now ends the process and needs no gateway.";
-        caller = "yes — the welcome page says the account is made on the machine (UI branch feat/image-managed-host). Branch feat/local-first-admin (ppenguin/CasaOS-UserService-RCOS), in staging";
+        caller = "yes — the welcome page says the account is made on the machine (ReCasaOS/CasaOS-UI#55). ReCasaOS/CasaOS-UserService#6 (branch feat/first-admin-local), in staging";
       }
       {
         path = "main.go: go route.EventListen()";
@@ -145,8 +145,8 @@ rec {
         path = "route/v1.go: /v1/sys/{os,os/*,update,autoupdate,packages*,docker/containers,docker/update*,modules*,stop}";
         kind = "pr";
         why = "Host management through the API: OS upgrade (apt), release self-update (installer as root), automatic updates, apt and Docker package updates, optional modules (apt + archive download + unit enable), self-kill.";
-        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts. Branch feat/nixos-host (ppenguin/CasaOS-RCOS), in staging.";
-        caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (UI branch feat/image-managed-host). The `casaos module` CLI subcommand stays in the binary (root only, no API path)";
+        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): host-management routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts; module routes answered by the image provider (`[server] ModuleCatalogue` = store file, none shipped; install = enable flag + unit start, no apt, no download). ReCasaOS/CasaOS#53 (branch feat/image-managed), in staging.";
+        caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (ReCasaOS/CasaOS-UI#55); Modules page lists the image's modules (none). The `casaos module` CLI subcommand stays in the binary (root only, no API path; refuses an image catalogue)";
       }
       {
         path = "pkg/telemetry: anonymous statistics (PostHog), on by default";
@@ -173,7 +173,7 @@ rec {
         path = "CasaOS-Common utils/command OnlyExec; ${common}/shell/*.sh shebangs: /bin/bash";
         kind = "pr";
         why = "Absolute /bin/bash does not exist on NixOS: every helper.sh call (OnlyExec) and every script run by its shebang would fail.";
-        replacedBy = "OnlyExec runs `bash` from PATH (CasaOS-Common fix/bash-from-path; the root builds against our Common staging through a go.mod replace until released); shebangs `#!/usr/bin/env bash` (feat/nixos-host).";
+        replacedBy = "OnlyExec runs `bash` from PATH (CasaOS-Common#6, merged, released in v0.4.31); shebangs of executed scripts `#!/usr/bin/env bash` (ReCasaOS/CasaOS#42, branch fix/samba-reload).";
         caller = "n/a";
       }
       {
@@ -187,14 +187,14 @@ rec {
         path = "route/*.go (all services): Authorization token lookup";
         kind = "pr";
         why = "Not host management — interoperability: every service took the whole Authorization value as the JWT, so the standard `Bearer <token>` (RFC 6750; OpenAPI `bearer`, curl `--oauth2-bearer`) was a 401. Bare token = CasaOS heritage, kept (owner decision 2026-10-23: tolerant reader, no breaking change).";
-        replacedBy = "CasaOS-Common `jwt.TokenFromAuthorization` (bare or `Bearer`, case-insensitive; other schemes untouched) used by root, gateway, user service, app management, message bus. Branches feat/bearer-authorization (ppenguin/*-RCOS), in staging; services build against our Common staging until released.";
+        replacedBy = "CasaOS-Common `jwt.TokenFromAuthorization` (bare or `Bearer`, case-insensitive; other schemes untouched) (CasaOS-Common#7, released in v0.4.31) used by root, gateway, user service, app management, message bus (and LocalStorage, VirtManagement, not shipped). PRs CasaOS#54, Gateway#3, UserService#7, AppManagement#18, MessageBus#6 (branches feat/bearer-authorization), in staging.";
         caller = "n/a — the dashboard keeps sending the bare token";
       }
       {
         path = "service/shares.go: smb.conf ownership, smbd restart on every share edit";
         kind = "pr";
         why = "The core moves and rewrites /etc/samba/smb.conf (a read-only store link on NixOS) and restarts smbd on every share change, dropping every session.";
-        replacedBy = "`[server] SambaMainConfig = external` (include-only: Nix owns smb.conf, the core writes and regenerates only smb.casa.conf at every start); share edits reload smbd and close only the edited shares (fix/samba-reload, feat/nixos-host). `smbd.service` is an alias of samba-smbd.service.";
+        replacedBy = "`[server] SambaMainConfig = external` (include-only: Nix owns smb.conf, the core writes and regenerates only smb.casa.conf at every start); share edits reload smbd and close only the edited shares (ReCasaOS/CasaOS#42 fix/samba-reload; include-only: branch feat/samba-include-only, PR after #42 lands). `smbd.service` is an alias of samba-smbd.service.";
         caller = "yes — exercised by check smb-shares (T13)";
       }
       {
@@ -231,7 +231,7 @@ rec {
         path = "src/components/TopBar.vue: update row, System packages row; src/views/Welcome.vue";
         kind = "pr";
         why = "In-place update, apt package updates and web registration of the first account are host management / unsafe on an image-managed appliance.";
-        replacedBy = "Rows follow the core: automatic updates, modules and the OS badge appear only where the core answers (absent in image-managed mode); package row hidden and update row reads 'Updated with the system image' on `image_managed`; welcome page says the first account is made on the machine on `first_admin: local`. Branch feat/image-managed-host (ppenguin/CasaOS-UI-RCOS), in staging.";
+        replacedBy = "Rows follow the core: automatic updates, modules and the OS badge appear only where the core answers (absent in image-managed mode); package row hidden and update row reads 'Updated with the system image' on `image_managed`; welcome page says the first account is made on the machine on `first_admin: local`. ReCasaOS/CasaOS-UI#55 (branch feat/image-managed-ui), in staging.";
         caller = "yes";
       }
     ];

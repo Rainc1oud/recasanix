@@ -20,17 +20,23 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 - lost vs EF: public-files portal (EF-only, not used), chosen-password reset (ORG `-ru` = random password)
 - file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, branch `feat/file-roots`, ReCasaOS/CasaOS#48)
 
-### PR branches (ORG, not opened yet)
+### PRs (ORG), state 2026-10-24
 
-| Repo | Branch | Commits | Kind |
-|---|---|---|---|
-| CasaOS-MessageBus | `fix/subscriptions-before-start` | subscription before Start survives; Publish/Trigger before Start dropped (no nil ctx) | correctness |
-| CasaOS-UI | `fix/storage-finally-app-grid` | `.finaly` typo; failing app grid keeps built-in apps | correctness |
-| CasaOS | `fix/samba-reload` | share edits reload smbd + close-share, restart only on smb.conf / Time Machine set change | correctness |
-| CasaOS | `feat/nixos-host` (on `fix/samba-reload`) | helper shebangs `env bash`; Samba include-only (`SambaMainConfig = external`); `ImageManaged` (host-management routes absent, no network version check, no autoupdate) | neutral / NixOS |
-| CasaOS-Common | `fix/bash-from-path` | OnlyExec: `bash` from PATH | neutral / NixOS |
-| CasaOS-UserService | `feat/local-first-admin` | `-ru` exits + no gateway; `FirstAdmin = local` + `-bootstrap-admin` (systemd credentials) | correctness + opt-in |
-| CasaOS-UI | `feat/image-managed-host` | package row hidden, "Updated with the system image"; welcome page for `first_admin: local` | neutral |
+| Repo | PR | Branch | Content | Kind | State |
+|---|---|---|---|---|---|
+| CasaOS-Common | #6 | `fix/bash-from-path` | OnlyExec: `bash` from PATH | neutral / NixOS | merged, v0.4.31 |
+| CasaOS-Common | #7 | `feat/bearer-authorization` | `jwt.TokenFromAuthorization` | interop | merged, v0.4.31 |
+| CasaOS-Common | #9 | `chore/review-nits` | doc wording, 2 token tests, Linux skip | nits | open |
+| CasaOS-UserService | #4 | `fix/reset-user-exits` | `-ru` exits, no gateway | correctness | merged |
+| CasaOS-MessageBus | #4 | `fix/subscriptions-before-start` | pre-Start subscriptions kept; action service locked; `Ready()` | correctness | review fixes pushed |
+| CasaOS-UI | #53 | `fix/storage-finally-app-grid` | `.finaly` typo; failing grid keeps built-ins; no order saved without the grid | correctness | review fixes pushed |
+| CasaOS | #42 | `fix/samba-reload` | reload + close-share; mutex; executed scripts `env bash` | correctness | review fixes pushed |
+| CasaOS | #49 | `feat/file-roots` | `[file] ManagementRoots` (EF's boundary, stage 1) | security, opt-in | review fixes pushed |
+| CasaOS | #53 | `feat/image-managed` | `ImageManaged` + `ModuleProvider` seam + image provider | neutral / NixOS | open |
+| CasaOS | — | `feat/samba-include-only` (on #42) | `SambaMainConfig = external` | neutral / NixOS | PR after #42 lands (#43) |
+| CasaOS-UserService | #6 | `feat/first-admin-local` | `FirstAdmin = local`, `-bootstrap-admin`; `-ru` reports failed writes; busy_timeout | security, opt-in | open |
+| CasaOS-UI | #55 | `feat/image-managed-ui` | package row hidden on `image_managed`; welcome on `first_admin: local` | neutral | open |
+| Gateway, UserService, AppManagement, MessageBus, CasaOS, LocalStorage, VirtManagement | Gateway#3, UserService#7, AppManagement#18, MessageBus#6, CasaOS#54, LocalStorage#6, VirtManagement#6 | `feat/bearer-authorization` | `Bearer <token>` accepted (#46) | interop | open |
 
 Local patches (ReCasaNix only): helper.sh host-management strip (root), local-storage listener (UserService).
 

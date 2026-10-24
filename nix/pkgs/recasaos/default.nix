@@ -10,7 +10,7 @@ mkCasaosGo {
   pname = "casaos";
   version = lib.removePrefix "v" components.recasaos.tag;
   inherit src;
-  vendorHash = "sha256-T+/8xOpkjHvNbsBYyNL8GhLJfMgiNvDC7TZ4YldtzaY=";
+  vendorHash = "sha256-gwNAE98PK1EqfiVpRT6N704+f4FciC5eIx4VWyqNR3w=";
 
   # Deviation from upstream (CGO_ENABLED=1, CGO_LDFLAGS=-static, UPX): nothing in the tree uses cgo
   # (`grep -rn 'import "C"'` is empty; sqlite is glebarez/modernc, pure Go) → CGO_ENABLED=0 with

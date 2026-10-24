@@ -44,12 +44,15 @@ buildGoModule (
       ${extraPostInstall}
     '';
 
-    # CasaOS-Common: our staging (unreleased fixes: bash from PATH, Bearer tokens) replaces the go.mod
-    # version, copied in (a store path in vendor/modules.txt would end up in the vendor hash). Runs in
-    # the vendoring derivation too. T7 checks the root still requires the version it stands in for.
+    # CasaOS-Common with open PRs (staging.json has it): our staging replaces the go.mod version,
+    # copied in (a store path in vendor/modules.txt would end up in the vendor hash). Runs in the
+    # vendoring derivation too. T7 checks the root still requires the version it stands in for.
+    # Without: each service's go.mod as upstream has it.
     postPatch = ''
-      cp -r ${components.casaos-common.src} casaos-common && chmod -R u+w casaos-common
-      go mod edit -replace github.com/ReCasaOS/CasaOS-Common=./casaos-common
+      ${lib.optionalString (components.casaos-common.staging != null) ''
+        cp -r ${components.casaos-common.src} casaos-common && chmod -R u+w casaos-common
+        go mod edit -replace github.com/ReCasaOS/CasaOS-Common=./casaos-common
+      ''}
       ${postPatch}
     '';
 

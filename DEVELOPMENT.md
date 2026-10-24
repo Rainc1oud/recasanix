@@ -1063,7 +1063,7 @@ passwords survive a reboot; re-assigning or removing the share hands the directo
 Share edits reload smbd instead of restarting it: an unrelated edit keeps smbd's PID and an open session
 on another share; narrowing a share closes that share's open sessions at once (CasaOS `fix/samba-reload`).
 `PUT /v1/samba/shares/:id` replaces account and Time Machine flag together (upstream contract).
-Include-only mode: CasaOS `feat/nixos-host`. Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
+Include-only mode: CasaOS `feat/samba-include-only` (on #42). Discovery: `samba-wsdd` (Windows) and avahi (mDNS).
 T14 (`nix/tests/smb-ui.{nix,py}`) drives the same through the dashboard.
 
 ### Running tests
@@ -1085,12 +1085,12 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | ID | Status | Task |
 |---|---|---|
 | R.1 | [x] | pins: `components.env` of CasaOS-Install as pin of record, `recasanix-staging` per fork, `staging.json`, `update.sh`, T7 |
-| R.2 | [x] | derivations: org module paths, offline codegen, Common staging `replace`, Go ≥ 1.26.8 (nixpkgs bump) |
-| R.3 | [x] | module: `SambaMainConfig = external`, `ImageManaged = true`, `FirstAdmin = local`, telemetry-off marker; bootstrap oneshot + `reset-password` via `-ru` |
+| R.2 | [x] | derivations: org module paths, offline codegen, Common staging `replace` (only while Common has open PRs), Go ≥ 1.26.8 (nixpkgs bump) |
+| R.3 | [x] | module: `SambaMainConfig = external`, `ImageManaged = true` + `ModuleCatalogue` (empty image catalogue, store), `FirstAdmin = local`, telemetry-off marker; bootstrap oneshot + `reset-password` via `-ru` |
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
 | R.6 | [x] | `nix flake check` green on the org base (T1–T14; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [~] | org PRs: MessageBus#4, UI#53, CasaOS#42, CasaOS#49 (file roots), Common#6, Common#7, UserService#4; issues CasaOS#43–#48 (switches, Bearer, modules seam, file roots); switch PRs after agreement |
+| R.7 | [~] | org PRs (COMPARISON-FORKS.md table): merged Common#6, #7 (v0.4.31), UserService#4; review fixes pushed MessageBus#4, UI#53, CasaOS#42, #49; open CasaOS#53 (image-managed + modules seam), UserService#6 (first admin), UI#55, Bearer ×7, Common#9; include-only after #42; pins at release v0.5.49 |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 
