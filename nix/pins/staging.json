@@ -12,17 +12,17 @@
         "feat/file-roots"
       ],
       "base": "4fb1569404656ad3b541d5a6e930968703be9c6b",
-      "head": "dd6d00c7e0c72391d6565e70186b83360d293ffc"
+      "head": "c389b6a1222369be1a3bc72a9eb69c264ea7bd1f"
     },
     "recasaos-message-bus": {
       "upstream": "ReCasaOS/CasaOS-MessageBus",
       "fork": "ppenguin/CasaOS-MessageBus-RCOS",
       "prs": [
-        "fix/subscriptions-before-start",
+        "fix/bus-teardown",
         "feat/bearer-authorization"
       ],
       "base": "5249d6443ae55bc6d4e9ccb5f88a49ffddabee1e",
-      "head": "ad67cf23ff49ce427513af45e62c65555b50897a"
+      "head": "42fff4802d40ad0b327e16af3897e16c0c44d835"
     },
     "recasaos-user-service": {
       "upstream": "ReCasaOS/CasaOS-UserService",
@@ -32,17 +32,17 @@
         "feat/bearer-authorization"
       ],
       "base": "8873ee87321fe6de3288d417e686ccda8897fc9a",
-      "head": "d7179d5ecc81aa78566cc4826835f69ff0830d02"
+      "head": "468153cfb4510e89f6cb9250cd1e177250454e5f"
     },
     "casaos-ui": {
       "upstream": "ReCasaOS/CasaOS-UI",
       "fork": "ppenguin/CasaOS-UI-RCOS",
       "prs": [
-        "fix/storage-finally-app-grid",
+        "fix/app-grid-followups",
         "feat/image-managed-ui"
       ],
       "base": "0f710a26bcf619db281146867944845bbe1ca2ac",
-      "head": "aca3fa8d89d511c721fd00ffca4ebb672352d3af"
+      "head": "ee860663353fff3dca05891f851ff60f76e54459"
     },
     "recasaos-gateway": {
       "upstream": "ReCasaOS/CasaOS-Gateway",
@@ -51,7 +51,7 @@
         "feat/bearer-authorization"
       ],
       "base": "5434b2121d1940c76b1386befbd2039ab63b31c4",
-      "head": "e030a04b389e89d707d06bdef42d8751452e79fe"
+      "head": "5c457b4cd07d6abad1b1fea0c57b12c8c12e4fc0"
     },
     "recasaos-app-management": {
       "upstream": "ReCasaOS/CasaOS-AppManagement",
@@ -60,7 +60,7 @@
         "feat/bearer-authorization"
       ],
       "base": "095cc63e6f6f5a965315f4270e6c24854767cf28",
-      "head": "d50ec15e3def633d9c64337d3b01798078703592"
+      "head": "d04ca6027dc96c76f1eeb014ef9a9929e1f17fd5"
     }
   },
   "install": "ed12691268a8f35792b55a256a9107f6d6038e75",

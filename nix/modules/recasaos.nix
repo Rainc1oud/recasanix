@@ -74,13 +74,13 @@ let
       };
     };
 
-  # The modules of the image ([server] ModuleCatalogue, image provider of the core): none shipped
-  # yet. A module joins with an entry (`source: image`) here and its unit in the image, started at
-  # boot only where enabled (ConditionPathExists=/var/lib/casaos/modules/<name>.enabled).
+  # The modules of the image ([server] ModuleCatalogue, image provider of the core): the entries of
+  # `imageModules` (`source: image`), each with its unit in the image, started at boot only where
+  # enabled (ConditionPathExists=/var/lib/casaos/modules/<name>.enabled). Root-owned store file.
   moduleCatalogue = pkgs.writeText "recasanix-module-catalogue.json" (
     builtins.toJSON {
       schema = 1;
-      modules = [ ];
+      modules = map (entry: entry // { source = "image"; }) cfg.imageModules;
     }
   );
 
@@ -235,6 +235,18 @@ in
       description = ''
         Port the gateway listens on. This only seeds a missing gateway.ini: the port can be changed
         from the UI afterwards, and that change is hot state that survives image updates.
+      '';
+    };
+
+    imageModules = lib.mkOption {
+      type = lib.types.listOf (lib.types.attrsOf lib.types.anything);
+      default = [ ];
+      description = ''
+        Modules the image ships, as entries of the core's module catalogue (CasaOS `osmodule.Entry`:
+        name, component, tier, tag, commit, manifest; `source = "image"` is added). The Modules page
+        enables and disables them: a flag file + start/stop of the unit, which the image provides
+        with `ConditionPathExists=/var/lib/casaos/modules/<name>.enabled` and `wantedBy`
+        multi-user.target. None by default.
       '';
     };
 

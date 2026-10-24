@@ -145,7 +145,7 @@ rec {
         path = "route/v1.go: /v1/sys/{os,os/*,update,autoupdate,packages*,docker/containers,docker/update*,modules*,stop}";
         kind = "pr";
         why = "Host management through the API: OS upgrade (apt), release self-update (installer as root), automatic updates, apt and Docker package updates, optional modules (apt + archive download + unit enable), self-kill.";
-        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): host-management routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts; module routes answered by the image provider (`[server] ModuleCatalogue` = store file, none shipped; install = enable flag + unit start, no apt, no download). ReCasaOS/CasaOS#53 (branch feat/image-managed), in staging.";
+        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): host-management routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts; module routes answered by the image provider (`[server] ModuleCatalogue` = root-owned store file from `services.recasaos.imageModules`, none shipped; install = enable flag + unit start, no apt, no download; T15). ReCasaOS/CasaOS#53 (branch feat/image-managed), in staging.";
         caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (ReCasaOS/CasaOS-UI#55); Modules page lists the image's modules (none). The `casaos module` CLI subcommand stays in the binary (root only, no API path; refuses an image catalogue)";
       }
       {
