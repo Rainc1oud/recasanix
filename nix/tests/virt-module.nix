@@ -56,7 +56,7 @@ pkgs.testers.runNixOSTest {
         mods = api("GET", "/v1/sys/modules")["data"]
         virt = [m for m in mods["modules"] if m["name"] == "virt"]
         assert mods["catalogue"]["ok"] is True and virt and virt[0]["installed"] is None, mods
-        assert virt[0]["tag"] == "v0.2.2", virt
+        assert virt[0]["tag"] == "v0.2.3", virt
         machine.fail("systemctl is-active casaos-virt-management.service")
         machine.fail("systemctl is-active libvirtd.service")
 

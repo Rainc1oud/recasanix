@@ -13,7 +13,7 @@ mkCasaosGo {
   pname = "casaos-virt-management";
   version = lib.removePrefix "v" components.recasaos-virt-management.tag;
   inherit src;
-  vendorHash = "sha256-IMbts9oYodKSYTrB5MAJDihlmQbu+Y400NUds1EM02E=";
+  vendorHash = "sha256-F3WNkIU+ngQzTPwDP1FuiOBJbN0y98rHa344e8xsL5U=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-VirtManagement = "casaos-virt-management";
   repo = components.recasaos-virt-management.repo;

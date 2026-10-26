@@ -14,14 +14,15 @@
     # live in flake.lock and only nix/pins/update.sh moves them (never a bare `nix flake update`: T7 fails).
     # - pin of record: CasaOS-Install release/components.env (tag + commit per component)
     # - component with open upstream PRs: our fork's `recasanix-staging` = pin + PRs merged
-    #   (nix/pins/staging.json) → post-merge preview through the normal source mechanism
+    #   (nix/pins/staging.json; update.sh locks the fork's head) → post-merge preview
+    # - URLs below: upstream (no open PRs since release v0.5.50)
     # - other components: upstream, at the commit of components.env
     recasaos-install = {
       url = "github:ReCasaOS/CasaOS-Install";
       flake = false;
     };
     recasaos = {
-      url = "github:ppenguin/CasaOS-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS";
       flake = false;
     };
     # Go dependency of every service (go.mod); our staging only while it has open PRs of ours
@@ -30,29 +31,29 @@
       flake = false;
     };
     recasaos-gateway = {
-      url = "github:ppenguin/CasaOS-Gateway-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-Gateway";
       flake = false;
     };
     recasaos-user-service = {
-      url = "github:ppenguin/CasaOS-UserService-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-UserService";
       flake = false;
     };
     recasaos-app-management = {
-      url = "github:ppenguin/CasaOS-AppManagement-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-AppManagement";
       flake = false;
     };
     recasaos-message-bus = {
-      url = "github:ppenguin/CasaOS-MessageBus-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-MessageBus";
       flake = false;
     };
     # Modules (CasaOS-Install release/modules.env): built into the image, enabled per box
     recasaos-virt-management = {
-      url = "github:ppenguin/CasaOS-VirtManagement-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-VirtManagement";
       flake = false;
     };
     # UI: ReCasaOS/CasaOS-UI, the Vue 3 dashboard (AGENTS.md §2)
     casaos-ui = {
-      url = "github:ppenguin/CasaOS-UI-RCOS/recasanix-staging";
+      url = "github:ReCasaOS/CasaOS-UI";
       flake = false;
     };
   };

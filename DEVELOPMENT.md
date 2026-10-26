@@ -1092,7 +1092,7 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
 | R.6 | [x] | `nix flake check` green on the org base (T1–T16; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [~] | org PRs (COMPARISON-FORKS.md table): merged Common#6, #7 (v0.4.31), UserService#4, CasaOS#42, MessageBus#4, UI#53; second review round pushed CasaOS#49, #53, UserService#6, UI#55; open CasaOS#55 (include-only), Bearer ×7, Common#9, MessageBus#7, UI#56; pins at release v0.5.49 |
+| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.51, staging empty |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 

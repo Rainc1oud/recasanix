@@ -18,26 +18,26 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 - trial: whole base on ORG, our changes as PR branches in `ppenguin/*-RCOS`, consumed via `recasanix-staging`
 - of 27 EF PRs: 18 obsolete on ORG (already there or ORG-origin); ported: below
 - lost vs EF: public-files portal (EF-only, not used), chosen-password reset (ORG `-ru` = random password)
-- file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, branch `feat/file-roots`, ReCasaOS/CasaOS#48)
+- file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, ReCasaOS/CasaOS#49, merged)
 
-### PRs (ORG), state 2026-10-24 (evening)
+### PRs (ORG), state 2026-10-26: all merged; pins at release v0.5.51, staging empty
 
 | Repo | PR | Branch | Content | Kind | State |
 |---|---|---|---|---|---|
 | CasaOS-Common | #6, #7 | — | OnlyExec `bash` from PATH; `jwt.TokenFromAuthorization` | neutral / interop | merged, v0.4.31 |
-| CasaOS-Common | #9 | `chore/review-nits` | doc wording, 2 token tests, Linux skip | nits | open |
+| CasaOS-Common | #9 | `chore/review-nits` | doc wording, 2 token tests, Linux skip | nits | merged |
 | CasaOS-UserService | #4 | — | `-ru` exits, no gateway | correctness | merged |
 | CasaOS-MessageBus | #4 | — | pre-Start subscriptions kept; action service locked; `Ready()` | correctness | merged |
-| CasaOS-MessageBus | #7 | `fix/bus-teardown` | teardown does not close the inbound channel (panic) | correctness | open |
+| CasaOS-MessageBus | #7 | `fix/bus-teardown` | teardown does not close the inbound channel (panic) | correctness | merged, v0.5.50 |
 | CasaOS-UI | #53 | — | `.finaly`; failing grid keeps built-ins; no order saved without the grid | correctness | merged |
-| CasaOS-UI | #56 | `fix/app-grid-followups` | one `gridMissing` guard; toast spec | follow-up | open |
+| CasaOS-UI | #56 | `fix/app-grid-followups` | one `gridMissing` guard; toast spec | follow-up | merged, v0.5.50 |
 | CasaOS | #42 | — | reload + close-share; mutex; executed scripts `env bash` | correctness | merged |
-| CasaOS | #55 | `feat/samba-include-only` | `SambaMainConfig = external` (#43) | neutral / NixOS | open |
-| CasaOS | #49 | `feat/file-roots` | `[file] ManagementRoots` (EF's boundary, stage 1) | security, opt-in | round 2 pushed |
-| CasaOS | #53 | `feat/image-managed` | `ImageManaged` + `ModuleProvider` + image provider (#44, #47) | neutral / NixOS | round 2 pushed |
-| CasaOS-UserService | #6 | `feat/first-admin-local` | `FirstAdmin = local`, `-bootstrap-admin`; `-ru` one UPDATE | security, opt-in | round 2 pushed |
-| CasaOS-UI | #55 | `feat/image-managed-ui` | package row on `image_managed`; welcome on `first_admin: local` | neutral | round 2 pushed |
-| Gateway, UserService, AppManagement, MessageBus, CasaOS, LocalStorage, VirtManagement | #3, #7, #18, #6, #54, #6, #6 | `feat/bearer-authorization` | `Bearer <token>` accepted (#46) | interop | open |
+| CasaOS | #55 | `feat/samba-include-only` | `SambaMainConfig = external` (#43) | neutral / NixOS | merged, v0.5.50 |
+| CasaOS | #49 | `feat/file-roots` | `[file] ManagementRoots` (EF's boundary, stage 1) | security, opt-in | merged, v0.5.50 |
+| CasaOS | #53 | `feat/image-managed` | `ImageManaged` + `ModuleProvider` + image provider (#44, #47) | neutral / NixOS | merged, v0.5.50 |
+| CasaOS-UserService | #6 | `feat/first-admin-local` | `FirstAdmin = local`, `-bootstrap-admin`; `-ru` one UPDATE | security, opt-in | merged, v0.5.50 |
+| CasaOS-UI | #55 | `feat/image-managed-ui` | package row on `image_managed`; welcome on `first_admin: local` | neutral | merged, v0.5.50 |
+| Gateway, UserService, AppManagement, MessageBus, CasaOS, LocalStorage, VirtManagement | #3, #7, #18, #6, #54, #6, #6 | `feat/bearer-authorization` | `Bearer <token>` accepted (#46) | interop | merged, v0.5.50 |
 
 - org CI `no-ai-attribution`: commits/PR text carry no AI attribution lines (owner decision 2026-10-24, from now on)
 

@@ -9,7 +9,7 @@ mkCasaosGo {
   pname = "casaos-gateway";
   version = lib.removePrefix "v" components.recasaos-gateway.tag;
   inherit src;
-  vendorHash = "sha256-VfUw/2DWhQhNEWauXWDL6z2Utm0EajUmePNqq8bgTpU=";
+  vendorHash = "sha256-C3WmjOxmmZkEvakWNZVMI8jwzd6zmCfAWOCnmUisaBs=";
   subPackages = [ "." ];
   renameBinaries.CasaOS-Gateway = "casaos-gateway";
   repo = components.recasaos-gateway.repo;
