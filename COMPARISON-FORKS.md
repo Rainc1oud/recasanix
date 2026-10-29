@@ -37,8 +37,8 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 | CasaOS | #53 | `feat/image-managed` | `ImageManaged` + `ModuleProvider` + image provider (#44, #47) | neutral / NixOS | merged, v0.5.50 |
 | CasaOS-UserService | #6 | `feat/first-admin-local` | `FirstAdmin = local`, `-bootstrap-admin`; `-ru` one UPDATE | security, opt-in | merged, v0.5.50 |
 | CasaOS-UI | #55 | `feat/image-managed-ui` | package row on `image_managed`; welcome on `first_admin: local` | neutral | merged, v0.5.50 |
-| CasaOS-UI | — | `feat/storage-pools` | Pool tab: storage layer (`/v2/storage`), plan → preview → apply | feature | staging (draft PR after owner tests) |
-| CasaOS-LocalStorage | — | `feat/storage-layer-api` | `api/storage/openapi.yaml`: backend-neutral storage layer contract (proposal) | proposal | not shipped (draft PR after owner tests) |
+| CasaOS-UI | #69 | `feat/storage-pools` | Pool tab: storage layer (`/v2/storage`), plan → preview → apply | feature | draft, staging; out of draft after owner tests |
+| CasaOS-LocalStorage | #10 | `feat/storage-layer-api` | `api/storage/openapi.yaml`: backend-neutral storage layer contract (proposal) | proposal | draft; not shipped |
 | CasaOS | — | `feat/raid-alerts-any-backend` | RAID alerts for any backend (btrfs): unnamed member, unknown level, growing `errors` | feature | staging (PR later) |
 | Gateway, UserService, AppManagement, MessageBus, CasaOS, LocalStorage, VirtManagement | #3, #7, #18, #6, #54, #6, #6 | `feat/bearer-authorization` | `Bearer <token>` accepted (#46) | interop | merged, v0.5.50 |
 

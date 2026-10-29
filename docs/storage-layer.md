@@ -146,6 +146,6 @@ Conflicts, options:
 |---|---|---|
 | I0 | RAID state + alerts (done: `GET /v1/disks/raid`, fork `feat/raid-alerts-any-backend`, T11, T17) | — |
 | I1 | **done** — engine (`layout.go`, `pools.go`, `plan.go`, `api_v2.go`): btrfs (none, mirror 2/3) + md (parity 1/2, btrfs on top); verbs create, add, replace, remove, change layout (btrfs), restore layout, check / stop, mount degraded, wipe; T18 | — |
-| I2 | **done (draft)** — CasaOS-UI `feat/storage-pools` (Pool tab, plan dialog), in staging; contract: CasaOS-LocalStorage `feat/storage-layer-api` (`api/storage/openapi.yaml`); T11 phase `layer` | owner tests → PRs out of draft |
+| I2 | **done (draft)** — CasaOS-UI#69 `feat/storage-pools` (Pool tab, plan dialog), in staging; contract: CasaOS-LocalStorage#10 `feat/storage-layer-api` (`api/storage/openapi.yaml`); T11 phase `layer` | owner tests → PRs out of draft |
 | I3 | volumes (subvolumes) + shares/apps integration, quotas | C1 a |
 | I4 | further backends (mdadm, ZFS) | C4 |
