@@ -20,6 +20,7 @@ const (
 		"available yet. Create a new storage on a blank disk instead."
 	mountOnlyNotSupportedMessage = "Using an existing filesystem without formatting it is not supported yet; " +
 		"only creating a new formatted storage on a blank disk is."
+	raidRepairNotSupportedMessage = "Adding a disk to a mirror or taking one out is not available yet."
 )
 
 // envelope is the v1 response format of the CasaOS services.
@@ -53,6 +54,9 @@ func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/disks", a.disks)
 	mux.HandleFunc("GET /v1/disks/usb", a.usb)
+	mux.HandleFunc("GET /v1/disks/raid", a.raid)
+	mux.HandleFunc("POST /v1/disks/raid/{name}/disks", a.raidRepair)
+	mux.HandleFunc("DELETE /v1/disks/raid/{name}/disks/{member}", a.raidRepair)
 	mux.HandleFunc("GET /v1/storage", a.storage)
 	mux.HandleFunc("POST /v1/storage", a.createStorage)
 	mux.HandleFunc("GET /v2/local_storage/merge", a.merge)
@@ -169,6 +173,21 @@ func formatBytes(n uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// raid: the multi-device btrfs filesystems and their state, in LocalStorage's md shape (raid.go).
+func (a *API) raid(w http.ResponseWriter, r *http.Request) {
+	arrays, err := a.inv.RAID(r.Context())
+	if err != nil {
+		a.internalError(w, "list raid", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, envelope{Success: http.StatusOK, Message: "ok", Data: arrays})
+}
+
+// raidRepair: adding or taking out a member is the storage layer's (replace, degraded mount); refused.
+func (a *API) raidRepair(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotImplemented, envelope{Success: http.StatusNotImplemented, Message: raidRepairNotSupportedMessage})
 }
 
 // usb: removable media is not supported yet (it comes back as native units, not scripts), so there is

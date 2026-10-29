@@ -5,7 +5,8 @@ widget, and read the panel. Phase "blank" (two blank disks, no pool): the Storag
 volume, the Drive tab shows both blank disks, and pressing Create Storage → Format and create actually
 creates one — a success toast, and the panel returns to the list (not stuck on "Creation in progress",
 PR ReCasaOS-UI#13). Phase "pool" (both disks now used, one JBOD pool made via the API for the second disk):
-the Storage tab shows the pool.
+the Storage tab shows the pool. Phase "degraded" (the pool made a mirror, one member unplugged): the
+storage reads RAID 1 and Degraded (GET /v1/disks/raid).
 
 In both phases the three requests the panel makes must be answered (not 404), which is the whole
 point: before this service existed they were 404 and the panel was defunct.
@@ -102,7 +103,7 @@ print("--- Storage tab ---\n" + storage_tab)
 print("--- Drive tab ---\n" + drive_tab)
 
 # the requests the panel makes are answered
-for needle in ("/v1/disks", "/v1/storage", "/v2/local_storage/merge"):
+for needle in ("/v1/disks", "/v1/storage", "/v2/local_storage/merge", "/v1/disks/raid"):
     calls = [e for e in panel_calls if needle in e[2] and e[0] == "GET"]
     check(calls, f"the panel never asked for {needle}")
     check(all(e[1] == 200 for e in calls), f"{needle} was answered {[e[1] for e in calls]}")
@@ -121,6 +122,10 @@ elif phase == "pool":
     check("recasanix-data" in storage_tab, "the Storage tab does not show the pool")
     check("btrfs" in storage_tab.lower(), "the pool's filesystem is not shown")
     check("vdb" in drive_tab and "vdc" in drive_tab, "the Drive tab does not list the pool's disks")
+elif phase == "degraded":
+    check("recasanix-data" in storage_tab, "the Storage tab does not show the pool")
+    check("RAID 1" in storage_tab, "the pool does not read RAID 1")
+    check("Degraded" in storage_tab, "the mirror missing a disk does not read Degraded")
 else:
     failures.append(f"unknown phase {phase}")
 

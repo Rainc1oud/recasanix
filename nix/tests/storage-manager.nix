@@ -80,7 +80,7 @@ pkgs.testers.runNixOSTest {
         assert result.returncode == 0, f"storage manager UI check ({phase}) failed (output above)"
 
     # --- nobody gets in without a valid access token ---------------------------------------------------
-    for path in ["/v1/disks", "/v1/storage", "/v1/disks/usb", "/v2/local_storage/merge"]:
+    for path in ["/v1/disks", "/v1/storage", "/v1/disks/usb", "/v1/disks/raid", "/v2/local_storage/merge"]:
         code, _ = call("GET", path)
         assert code == 401, f"{path} without a token -> {code}"
         code, _ = call("GET", path, bearer="not-a-token")
@@ -120,6 +120,8 @@ pkgs.testers.runNixOSTest {
     assert code == 200 and r["data"] == [], r
     code, r = call("GET", "/v2/local_storage/merge", access)
     assert code == 200 and r["data"] == [] and "success" not in r, r
+    code, r = call("GET", "/v1/disks/raid", access)
+    assert code == 200 and r["data"] == [], r  # no multi-device btrfs yet
 
     # --- changes to an *existing* storage are refused, and say why; nothing on the machine changes -------
     # (POST /v1/storage is not in this list: creating a new one is supported, exercised below.)
@@ -214,5 +216,63 @@ pkgs.testers.runNixOSTest {
         timeout=120,
     )
     machine.succeed("test \"$(systemctl show recasanix-storage.service -p NRestarts --value)\" = 0")
+
+    # --- RAID state: GET /v1/disks/raid (LocalStorage's md shape, from the btrfs) — JBOD, then a
+    # mirror, a scrub, repair refused, a member unplugged ------------------------------------------------
+    import time
+
+    def raid():
+        code, r = call("GET", "/v1/disks/raid", access)
+        assert code == 200 and r["success"] == 200, r
+        assert len(r["data"]) == 1, r
+        return r["data"][0]
+
+    def wait_raid(state, timeout=60):
+        for _ in range(timeout):
+            a = raid()
+            if a["state"] == state:
+                return a
+            time.sleep(1)
+        raise AssertionError(f"array never {state}: {a}")
+
+    code, r = call("GET", "/v1/storage", access)
+    pool_disk = r["data"][0]["path"]
+    a = raid()
+    # the UI attaches the array to the storage listed under the same disk
+    assert a["name"] == "recasanix-data" and a["path"] == pool_disk, (a, pool_disk)
+    assert a["level"] == "single" and a["state"] == "ok" and a["disks"] == 2 and a["missing"] == 0, a
+    assert sorted(m["name"] for m in a["members"]) == ["vdb", "vdc"], a
+    assert all(m["state"] == "active" and m["errors"] == 0 for m in a["members"]), a
+
+    # the JBOD made a mirror by hand (TESTING.md): the profile follows
+    machine.succeed("btrfs balance start -f -dconvert=raid1 -mconvert=raid1 /var/lib/recasanix/data")
+    a = raid()
+    assert a["level"] == "raid1" and a["state"] == "ok" and a["action"] == "idle", a
+
+    # a scrub, slowed down so it is seen running (the kernel's progress, not btrfs-progs' status file)
+    machine.succeed("dd if=/dev/urandom of=/var/lib/recasanix/data/blob bs=1M count=200 conv=fsync")
+    fsid = machine.succeed("findmnt -n -o UUID /var/lib/recasanix/data").strip()
+    machine.succeed(f"for d in /sys/fs/btrfs/{fsid}/devinfo/*; do echo 2000000 > $d/scrub_speed_max; done")
+    # its background worker inherits the output: detach it, or succeed() waits for the whole scrub
+    machine.succeed("btrfs scrub start /var/lib/recasanix/data >/dev/null 2>&1")
+    a = wait_raid("checking")
+    assert a["action"] == "check" and 0 <= a["progress"] <= 100, a
+    machine.succeed("btrfs scrub cancel /var/lib/recasanix/data")
+    wait_raid("ok")
+
+    # repair (add a disk, take one out) is the storage layer's: refused, nothing changes
+    before = machine.succeed("btrfs filesystem show /var/lib/recasanix/data")
+    for method, path in [("POST", "/v1/disks/raid/recasanix-data/disks"), ("DELETE", "/v1/disks/raid/recasanix-data/disks/vdc")]:
+        code, r = call(method, path, access, '{"path":"/dev/vdc","confirm":"vdc"}')
+        assert code == 501 and "not available yet" in r["message"], f"{method} {path} -> {code} {r}"
+    assert machine.succeed("btrfs filesystem show /var/lib/recasanix/data") == before
+
+    # a member unplugged while mounted: the kernel keeps it (missing = 0); the block device is gone
+    machine.succeed("echo 1 > $(readlink -f /sys/block/vdc/device/..)/remove")
+    machine.succeed("dd if=/dev/urandom of=/var/lib/recasanix/data/after bs=1M count=20 conv=fsync")
+    a = wait_raid("degraded")
+    gone = [m for m in a["members"] if m["name"] == "vdc"]
+    assert a["missing"] == 1 and a["disks"] == 2 and gone and gone[0]["state"] == "faulty", a
+    browser("degraded")
   '';
 }

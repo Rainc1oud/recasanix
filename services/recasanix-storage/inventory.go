@@ -34,10 +34,12 @@ type Inventory struct {
 	cfg   Config
 	run   Runner
 	smart *smartReader
+	sys   string      // sysfs ("/sys"): btrfs state, block devices
+	btrfs btrfsKernel // what only an ioctl answers
 }
 
 func newInventory(cfg Config, run Runner, smart *smartReader) *Inventory {
-	return &Inventory{cfg: cfg, run: run, smart: smart}
+	return &Inventory{cfg: cfg, run: run, smart: smart, sys: "/sys", btrfs: sysBtrfs{}}
 }
 
 // --- the shapes the UI was written against (CasaOS-LocalStorage's v1 API) ---------------------

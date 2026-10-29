@@ -395,10 +395,10 @@ in
               };
             };
 
-            # Read-only storage manager (the UI's storage widget). It registers its routes with the
+            # Storage manager (the UI's storage widget). It registers its routes with the
             # gateway using the gateway's service token, which is why it runs as root: the token file is
-            # owner-only. Everything else about it is locked down — it reads block devices and changes
-            # nothing on the machine.
+            # owner-only. Everything else about it is locked down — it reads block devices (lsblk, sysfs,
+            # read-only btrfs ioctls) and writes only a validated create (docs/storage-manager.md).
             recasanix-storage = lib.mkIf cfg.storage.enable (mkUnit {
               description = "ReCasaNix storage manager";
               exe = cfg.storage.package;

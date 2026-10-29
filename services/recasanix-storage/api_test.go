@@ -45,7 +45,7 @@ func decode(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 
 func TestEveryRouteRequiresAuthentication(t *testing.T) {
 	h, _, _ := testServer(t, "vm-blank-disk.json")
-	for _, target := range []string{"/v1/disks", "/v1/disks/usb", "/v1/storage", "/v1/storage?system=show", "/v2/local_storage/merge", "/v2/local_storage/mount", "/anything/else"} {
+	for _, target := range []string{"/v1/disks", "/v1/disks/usb", "/v1/disks/raid", "/v1/disks/raid/x/disks", "/v1/storage", "/v1/storage?system=show", "/v2/local_storage/merge", "/v2/local_storage/mount", "/anything/else"} {
 		for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
 			if w := do(h, method, target, ""); w.Code != http.StatusUnauthorized {
 				t.Errorf("%s %s without a token: %d", method, target, w.Code)

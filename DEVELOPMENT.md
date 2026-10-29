@@ -694,6 +694,14 @@ storage is refused with a message that says so.
   system disk, an in-use or already-populated disk, or one below the 1 GiB minimum are all rejected before
   any command runs. `avail` itself was tightened to require a genuinely blank disk (no partition, no
   filesystem), not merely an unmounted one, on the owner's explicit instruction.
+- **RAID state (2026-10-29)**: `GET /v1/disks/raid` = upstream LocalStorage's md shape (v0.5.53 UI panels:
+  tag, members, widget RAID tag), filled from multi-device btrfs:
+  - sysfs `/sys/fs/btrfs/<uuid>`: devinfo (missing, replace_target, error_stats), data profile, exclusive_operation
+  - read-only ioctls: DEV_INFO (devid → device), SCRUB_PROGRESS, DEV_REPLACE status; superblock device count (unmounted)
+  - states: ok, degraded (member missing / unplugged), rebuilding (replace), checking (scrub), reshaping (balance,
+    device remove, two data profiles), inactive (unmounted, member missing)
+  - repair routes (`POST/DELETE /v1/disks/raid/{name}/disks…`) → 501 (storage layer)
+  - T11: JBOD → raid1 by hand → scrub → repair refused → member unplugged → UI reads "RAID 1", "Degraded"
 - **T11 found what unit tests could not**: with the *real* `lsblk`, the mount point of a two-disk btrfs mirror
   is reported on **one member only**, so the second member was offered as available for a new storage. Fixed
   (all members of a mounted filesystem count as in use) and covered by both the unit fixture and the VM test.
@@ -1106,7 +1114,7 @@ Recorded so nobody picks them up early, and so the phase-1 work stays shaped for
 | Podman evaluation | Re-test app-store compatibility against `virtualisation.podman.dockerCompat`. |
 | ZFS variant | Commented block from 2.1; flip and run T3 against it. |
 | Signing infrastructure | Cert chain and key rotation for RAUC bundles. |
-| **Storage layer (owner decision (b))** | **Targeted for the first release in more or less full functionality — revisit its maturity in time; do not let the prototype's by-hand steps stand in for it.** *Task 3.4 already covers listing, and creating a new pool or extending it (JBOD, whole-disk, single-profile). What remains here*: **repair/replace a disk, a mirror (or converting single→raid1) as a real UI choice**, `degraded` mount as an explicit operation, format/remove an *existing* storage, surface SMART and scrub state, later removable media (deferred, reinstated as native units) — on the same routes, same validate-against-a-fresh-listing discipline, same argument-vector-only rule. Tests: extend `storage-manager.nix` (T11) rather than starting a new suite — it already has the fixtures, the token flow and the browser wiring. |
+| **Storage layer (owner decision (b))** | **Targeted for the first release in more or less full functionality — revisit its maturity in time; do not let the prototype's by-hand steps stand in for it.** *Task 3.4 already covers listing, and creating a new pool or extending it (JBOD, whole-disk, single-profile). What remains here*: **repair/replace a disk, a mirror (or converting single→raid1) as a real UI choice**, `degraded` mount as an explicit operation, format/remove an *existing* storage, surface SMART (scrub/degraded/replace state: done, `GET /v1/disks/raid`), RAID alerts (root's CasaOS#59 reads md only), later removable media (deferred, reinstated as native units) — on the same routes, same validate-against-a-fresh-listing discipline, same argument-vector-only rule. Tests: extend `storage-manager.nix` (T11) rather than starting a new suite — it already has the fixtures, the token flow and the browser wiring. |
 | First-run UX | Setup wizard, factory reset. |
 | SMB/shares hardening | Upstream's SMB-credential admission units are shipped but unexercised by tests. |
 | Git apps (reconsider) | Hidden (UI patch `0001-hide-git-apps.patch`, owner decision 2026-10-23: build on the box + inbound redeploy webhook = attack surface). Upstream keeps improving them (v0.5.54–57: `COMPOSE_FILE`/`COMPOSE_PROFILES`, `.env`, private registries) → revisit later; routes still in app management. |

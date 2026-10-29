@@ -66,6 +66,8 @@ registered with the gateway.
 | `GET /v1/storage[?system=show]` | `{…, data: [{disk_name, size, path, type, children: [Volume]}]}` — the system disk only with `?system=show` |
 | `POST /v1/storage` `{path, format:true}` | Formats `path` (or adds it to the pool if one already exists) and brings it online. `200` on success; `409` if `path` is not currently eligible; `501` if `format` is `false` (mounting an existing filesystem instead of formatting is not supported) |
 | `PUT /v1/storage`, `DELETE /v1/storage` | **501** — formatting or removing an existing storage is not supported yet |
+| `GET /v1/disks/raid` | `data: [RAIDArray]` — every multi-device btrfs, in LocalStorage's md shape (below); `[]` without one |
+| `POST /v1/disks/raid/{name}/disks`, `DELETE /v1/disks/raid/{name}/disks/{member}` | **501** — adding a disk to a mirror or taking one out is not available yet |
 | `GET /v1/disks/usb` | `data: []` — removable media is not supported yet |
 | `GET /v2/local_storage/merge` | `{message, data: []}` — nothing is merged (the v2 format has no `success`) |
 | any other `GET` below those prefixes | 404 |
@@ -97,6 +99,32 @@ Mapping decisions:
 - `health` is the UI's truthiness flag: SMART "failed" is the empty string (the UI shows *Damage*), anything
   else — including "SMART does not answer", which virtual disks do — is non-empty (*Healthy*). `temperature`
   is `0` (the UI shows *N/A*) when unknown. SMART is asked at most once per five minutes per disk.
+
+## RAID state
+
+Upstream (v0.5.53) added md RAID panels to the UI: a state tag and members under the storage, an
+"array needs you" tag on the home widget, Add a disk / Take out. `GET /v1/disks/raid` answers them for the
+appliance's btrfs pool (JBOD or mirror).
+
+`RAIDArray`: `name` (fs label), `path` (the disk `/v1/storage` lists the volume under — the UI matches on it),
+`level` (data profile: `single`, `raid1`, `raid1c3`, `raid10`…), `state`, `disks`, `missing`,
+`component_size` (smallest member), `action`, `progress`, `remaining` (`-1`), `members[{name, disk, state, errors}]`.
+
+| State | When |
+|---|---|
+| `inactive` | not mounted, superblock names more devices than lsblk sees (a mirror needs `degraded` to mount) |
+| `rebuilding` | `exclusive_operation` = device replace; progress from the replace status ioctl |
+| `degraded` | a member missing (`devinfo/<id>/missing`, degraded mount) or its block device gone (unplugged while mounted: kernel keeps it, `missing` = 0) |
+| `checking` | a scrub runs (scrub-progress ioctl; progress = bytes scrubbed / `disk_used`) |
+| `reshaping` | balance (also paused), device remove, or two data profiles (interrupted conversion) |
+| `ok` | otherwise |
+
+- sources: sysfs `/sys/fs/btrfs/<uuid>` + three read-only ioctls (DEV_INFO, SCRUB_PROGRESS, DEV_REPLACE
+  status; `CAP_SYS_ADMIN`, already in the unit) + the superblock for an unmounted member; no btrfs-progs
+  output parsed (its scrub status has no progress while running)
+- member `errors`: the kernel's error counters summed (not in LocalStorage's shape; the UI ignores it)
+- single-device btrfs: no array (as a disk without md)
+- not covered: root's RAID alerts (CasaOS#59) read md only → no alert for a degraded btrfs yet
 
 ## Creating storage
 
@@ -157,8 +185,9 @@ mistake (T11 checks the pool's UUID is unchanged after such an attempt).
 
 - **Format, Remove and Merge on an *existing* storage are not implemented** (501). They are what the
   storage layer will add, on these same routes.
-- **A mirror shows as "Single storage drive"** and under its first member disk: that wording and shape are
-  the UI's. Both members appear on the Drive tab and neither is offered as available.
+- **A mirror is listed under one member disk** (the one lsblk reports the mount on); it reads "RAID 1"
+  (JBOD: "Single") from `GET /v1/disks/raid`. Both members appear on the Drive tab, neither as available.
+- **Repairing a mirror** (Add a disk, Take out) is offered by the UI when degraded and refused (501).
 - **Health can read "Healthy" when it is really unknown** (see above), and virtual disks have no model, so
   the Drive tab shows ", 512 MB HDD". Real disks answer SMART and have models.
 - **The image's blank `recasanix-data` partition is not offered.** It sits on the system disk (the eMMC), and
@@ -178,7 +207,8 @@ mistake (T11 checks the pool's UUID is unchanged after such an attempt).
 
 The plan ([DEVELOPMENT.md](../DEVELOPMENT.md), Phase 6, "Storage layer") is a full manager on these routes:
 extend, repair and replace a pool (`degraded` as an explicit operation, a mirror as a real UI choice, not
-just JBOD), surface SMART and scrub state, format/remove an existing storage, removable media. What this
+just JBOD), surface SMART, format/remove an existing storage, removable media. Mirror/scrub/replace
+**state** is already shown (RAID state, above). What this
 release already provides:
 
 - the **contract** — routes, shapes, the UI's quirks, all verified against the real UI;
