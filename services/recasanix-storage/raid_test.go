@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -120,6 +121,12 @@ func raidInventory(t *testing.T, lsblk string, sys *fakeSys, k *fakeBtrfs) *Inve
 	return inv
 }
 
+// asJSON is what the API shows of v.
+func asJSON(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
 func onlyArray(t *testing.T, inv *Inventory) RAIDArray {
 	t.Helper()
 	arrays, err := inv.RAID(context.Background())
@@ -145,7 +152,7 @@ func TestRAIDMirrorHealthy(t *testing.T) {
 		ComponentSize: 7 * gib, Action: "idle", Progress: -1, Remaining: -1,
 		Members: []RAIDMember{{Name: "sdb", Disk: "sdb", State: "active"}, {Name: "sda", Disk: "sda", State: "active"}},
 	}
-	if !reflect.DeepEqual(a, want) {
+	if asJSON(a) != asJSON(want) {
 		t.Fatalf("got  %+v\nwant %+v", a, want)
 	}
 	// the UI attaches the array to the storage listed under the same disk path
@@ -168,14 +175,14 @@ func TestRAIDDegradedMount(t *testing.T) {
 	sys.write(filepath.Join(dir, "devinfo", "2", "missing"), "1")
 	sys.block("sdb")
 	k := mirror()
-	k.devs[2] = fakeDev{"", 0}
-	k.scrub[1] = gib // a scrub does not hide that a disk is missing
+	k.devs[2] = fakeDev{"<missing disk>", 0} // what the kernel says for it
+	k.scrub[1] = gib                         // a scrub does not hide that a disk is missing
 	a := onlyArray(t, raidInventory(t, "mirror-pool.json", sys, k))
 
 	if a.State != "degraded" || a.Missing != 1 || a.Disks != 2 || a.ComponentSize != 8*gib {
 		t.Fatalf("%+v", a)
 	}
-	if a.Members[1] != (RAIDMember{Name: "devid 2", State: "faulty"}) {
+	if asJSON(a.Members[1]) != asJSON(RAIDMember{Name: "devid 2", State: "faulty"}) {
 		t.Fatalf("missing member: %+v", a.Members[1])
 	}
 }
@@ -191,7 +198,7 @@ func TestRAIDMemberUnpluggedWhileMounted(t *testing.T) {
 	if a.State != "degraded" || a.Missing != 1 {
 		t.Fatalf("%+v", a)
 	}
-	if a.Members[1] != (RAIDMember{Name: "sda", State: "faulty", Errors: 75880}) {
+	if asJSON(a.Members[1]) != asJSON(RAIDMember{Name: "sda", State: "faulty", Errors: 75880}) {
 		t.Fatalf("unplugged member: %+v", a.Members[1])
 	}
 }
@@ -210,7 +217,7 @@ func TestRAIDReplaceRunning(t *testing.T) {
 	if a.State != "rebuilding" || a.Action != "recover" || a.Progress != 22.9 || a.Disks != 2 || a.ComponentSize != 8*gib {
 		t.Fatalf("%+v", a)
 	}
-	if a.Members[0] != (RAIDMember{Name: "sdc", Disk: "sdc", State: "rebuilding"}) {
+	if asJSON(a.Members[0]) != asJSON(RAIDMember{Name: "sdc", Disk: "sdc", State: "rebuilding"}) {
 		t.Fatalf("replace target: %+v", a.Members[0])
 	}
 }
@@ -234,11 +241,9 @@ func TestRAIDReshaping(t *testing.T) {
 		profiles map[string]uint64
 		level    string
 	}{
-		"balance":                 {"balance", map[string]uint64{"raid1": 4 * gib}, "raid1"},
-		"paused balance":          {"balance paused", map[string]uint64{"raid1": 4 * gib}, "raid1"},
-		"device remove":           {"device remove", map[string]uint64{"single": 4 * gib}, "single"},
-		"interrupted conversion":  {"none", map[string]uint64{"single": 3 * gib, "raid1": 1 * gib}, "single"},
-		"conversion, raid1 ahead": {"none", map[string]uint64{"single": 1 * gib, "raid1": 3 * gib}, "raid1"},
+		"balance":        {"balance", map[string]uint64{"raid1": 4 * gib}, "raid1"},
+		"paused balance": {"balance paused", map[string]uint64{"raid1": 4 * gib}, "raid1"},
+		"device remove":  {"device remove", map[string]uint64{"single": 4 * gib}, "single"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			sys := newFakeSys(t)
@@ -250,6 +255,19 @@ func TestRAIDReshaping(t *testing.T) {
 				t.Fatalf("%+v", a)
 			}
 		})
+	}
+}
+
+// two data profiles, no operation: the disks are whole (ok); the pool says the data is not (pools.go)
+func TestRAIDMixedProfilesAreWholeDisks(t *testing.T) {
+	for profiles, level := range map[[2]uint64]string{{3 * gib, 1 * gib}: "single", {1 * gib, 3 * gib}: "raid1"} {
+		sys := newFakeSys(t)
+		sys.fs(mirrorUUID, []int{1, 2}, map[string]uint64{"single": profiles[0], "raid1": profiles[1]}, 2*gib)
+		sys.block("sda", "sdb")
+		a := onlyArray(t, raidInventory(t, "mirror-pool.json", sys, mirror()))
+		if a.State != "ok" || a.Action != "idle" || a.Level != level || !a.mixed {
+			t.Fatalf("%v: %+v", profiles, a)
+		}
 	}
 }
 
@@ -293,7 +311,7 @@ func TestRAIDUnmountedMemberMissing(t *testing.T) {
 		ComponentSize: 8 * gib, Action: "idle", Progress: -1, Remaining: -1,
 		Members: []RAIDMember{{Name: "sdb", Disk: "sdb", State: "active"}},
 	}
-	if !reflect.DeepEqual(a, want) {
+	if asJSON(a) != asJSON(want) {
 		t.Fatalf("got  %+v\nwant %+v", a, want)
 	}
 

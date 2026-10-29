@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -36,12 +38,31 @@ func (r execRunner) Run(ctx context.Context, name string, args ...string) ([]byt
 	// their output must not depend on the host's locale.
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "LC_ALL=C"}
 	out := &limitedBuffer{max: maxOutput}
-	cmd.Stdout = out
+	stderr := &limitedBuffer{max: maxStderr}
+	cmd.Stdout, cmd.Stderr = out, stderr
 	err := cmd.Run()
 	if out.exceeded {
 		return nil, errOutputTooLarge
 	}
+	if err != nil {
+		err = withStderr(err, stderr.buf.String())
+	}
 	return out.buf.Bytes(), err
+}
+
+// maxStderr bounds what a failing command says; its last lines go into the error.
+const maxStderr = 16 << 10
+
+// withStderr adds the last lines a failed command wrote to its error (for the log and a job's error).
+func withStderr(err error, stderr string) error {
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return err
+	}
+	if len(lines) > 3 {
+		lines = lines[len(lines)-3:]
+	}
+	return fmt.Errorf("%w: %s", err, strings.Join(lines, " | "))
 }
 
 // limitedBuffer stops accepting data past max instead of growing without bound.

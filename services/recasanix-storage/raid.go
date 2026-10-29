@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +31,13 @@ type RAIDArray struct {
 	Progress  float64      `json:"progress"`
 	Remaining int64        `json:"remaining"`
 	Members   []RAIDMember `json:"members"`
+
+	// for the storage layer (pools.go), not in the shape
+	backend string // btrfs, md
+	mixed   bool   // btrfs: more than one data profile (some data less protected than the layout)
+	device  string // md: /dev/mdN; btrfs: ""
+	uuid    string // the filesystem on it
+	mount   string // where that filesystem is mounted, "" when not
 }
 
 // RAIDMember is a device of the filesystem.
@@ -40,6 +48,9 @@ type RAIDMember struct {
 	// Errors: the kernel's error counters for the device (write, read, flush, corruption,
 	// generation), summed. Not in LocalStorage's shape; the UI ignores it.
 	Errors uint64 `json:"errors"`
+
+	devid uint64 // btrfs device id (0 for md)
+	size  uint64
 }
 
 // btrfsKernel is what only the kernel (an ioctl on a mounted btrfs, raid_linux.go) or the device
@@ -84,8 +95,11 @@ func (inv *Inventory) RAID(ctx context.Context) ([]RAIDArray, error) {
 				filesystems[b.UUID] = fs
 				order = append(order, b.UUID)
 			}
-			fs.members = append(fs.members, b)
-			fs.mounts = append(fs.mounts, b.Mounts...)
+			// a filesystem on md shows up under every member disk: once is enough
+			if !slices.ContainsFunc(fs.members, func(m Block) bool { return m.Path == b.Path }) {
+				fs.members = append(fs.members, b)
+				fs.mounts = append(fs.mounts, b.Mounts...)
+			}
 		})
 	}
 
@@ -110,9 +124,13 @@ func (inv *Inventory) RAID(ctx context.Context) ([]RAIDArray, error) {
 		if array.Path == "" {
 			array.Path = fs.members[0].Path
 		}
+		array.backend, array.uuid = "btrfs", uuid
+		if len(fs.mounts) > 0 {
+			array.mount = inv.chooseMount(fs.mounts)
+		}
 		arrays = append(arrays, *array)
 	}
-	return arrays, nil
+	return append(arrays, inv.mdArrays(physical, listedUnder)...), nil
 }
 
 // storageDisks: for each filesystem UUID, the disk path Storage lists it under (the UI matches an
@@ -157,10 +175,12 @@ func (inv *Inventory) mountedArray(fs *btrfsFS) *RAIDArray {
 	scrubbing := false
 	for _, id := range devids {
 		info := filepath.Join(dir, "devinfo", strconv.FormatUint(id, 10))
-		member := RAIDMember{Name: "devid " + strconv.FormatUint(id, 10), State: "active", Errors: errorCount(readSys(info, "error_stats"))}
+		member := RAIDMember{Name: "devid " + strconv.FormatUint(id, 10), State: "active", Errors: errorCount(readSys(info, "error_stats")), devid: id}
 		path, size, err := inv.btrfs.DevInfo(mount, id)
+		member.size = size
 		present := false
-		if err == nil && path != "" {
+		// a member absent at mount time: the kernel has no device for it ("" or "<missing disk>")
+		if err == nil && strings.HasPrefix(path, "/dev/") {
 			member.Name = filepath.Base(path)
 			// a device unplugged while mounted keeps its devinfo, missing = 0: only the block device is gone
 			_, statErr := os.Stat(filepath.Join(inv.sys, "class", "block", member.Name))
@@ -216,9 +236,11 @@ func (inv *Inventory) mountedArray(fs *btrfsFS) *RAIDArray {
 	case "balance", "balance paused", "device remove":
 		array.Action = "reshape"
 	default:
+		// two data profiles and no operation: written while a disk was missing (one copy), or a
+		// conversion that stopped; the disks are all there (state ok here), the data is not all
+		// protected (the pool says so, pools.go)
+		array.mixed = len(profiles) > 1
 		switch {
-		case len(profiles) > 1: // an interrupted conversion leaves two data profiles
-			array.Action = "reshape"
 		case scrubbing:
 			array.Action = "check"
 			var used uint64
@@ -259,7 +281,7 @@ func (inv *Inventory) unmountedArray(fs *btrfsFS) *RAIDArray {
 		Disks: int(total), Missing: int(total) - len(fs.members), Members: []RAIDMember{},
 	}
 	for _, m := range fs.members {
-		array.Members = append(array.Members, RAIDMember{Name: m.Name, Disk: diskOf(inv.sys, m.Name), State: "active"})
+		array.Members = append(array.Members, RAIDMember{Name: m.Name, Disk: diskOf(inv.sys, m.Name), State: "active", size: m.Size})
 		if array.ComponentSize == 0 || int64(m.Size) < array.ComponentSize {
 			array.ComponentSize = int64(m.Size)
 		}

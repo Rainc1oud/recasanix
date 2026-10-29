@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 // merging, mounting something without formatting it — is refused with a message that says so.
 
 // routePaths are registered with the gateway; the gateway forwards everything below them.
-var routePaths = []string{"/v1/disks", "/v1/storage", "/v2/local_storage"}
+var routePaths = []string{"/v1/disks", "/v1/storage", "/v2/local_storage", "/v2/storage"}
 
 const (
 	unsupportedChangeMessage = "Formatting or removing an existing storage, and merging storages, are not " +
@@ -46,6 +47,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 type API struct {
 	inv     *Inventory
 	creator *Creator
+	planner *Planner
 	log     *slog.Logger
 }
 
@@ -60,6 +62,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/storage", a.storage)
 	mux.HandleFunc("POST /v1/storage", a.createStorage)
 	mux.HandleFunc("GET /v2/local_storage/merge", a.merge)
+	mux.HandleFunc("GET /v2/storage", a.storageOverview)
+	mux.HandleFunc("GET /v2/storage/layouts", a.storageLayouts)
+	mux.HandleFunc("POST /v2/storage/plans", a.storagePlan)
+	mux.HandleFunc("POST /v2/storage/plans/{id}/apply", a.storageApply)
+	mux.HandleFunc("GET /v2/storage/jobs", a.storageJobs)
 
 	// Anything else below these prefixes: a change is refused, an unknown read is not found.
 	for _, p := range routePaths {
@@ -149,7 +156,10 @@ func (a *API) createStorage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.creator.Create(r.Context(), req.Path); err != nil {
+	if err := a.creator.Create(r.Context(), req.Path); errors.Is(err, errPoolOnMD) {
+		writeJSON(w, http.StatusConflict, envelope{Success: http.StatusConflict, Message: err.Error()})
+		return
+	} else if err != nil {
 		a.log.Error("create storage", "path", req.Path, "error", err)
 		writeJSON(w, http.StatusInternalServerError, envelope{
 			Success: http.StatusInternalServerError,

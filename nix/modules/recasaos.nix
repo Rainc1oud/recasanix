@@ -424,14 +424,15 @@ in
                 "casaos-gateway.service"
                 "casaos-user-service.service"
               ];
-              # lsblk/mount/mountpoint for the inventory and bringing a new pool online, smartctl for
-              # health and temperature, mkfs.btrfs/btrfs to create or extend the pool, udevadm to wait
+              # lsblk/mount/mountpoint/wipefs for the inventory and bringing a pool online, smartctl for
+              # health and temperature, mkfs.btrfs/btrfs/mdadm for the pool's verbs, udevadm to wait
               # for it, systemctl to start/restart the units the manual "make a pool" steps do.
               path = [
                 pkgs.util-linux
                 pkgs.coreutils
                 pkgs.smartmontools
                 pkgs.btrfs-progs
+                pkgs.mdadm # parity pools (docs/storage-layer.md)
                 pkgs.systemd
               ];
               serviceConfig = {
@@ -442,9 +443,14 @@ in
                   "CAP_DAC_READ_SEARCH" # look at every mount point, read-only
                   "CAP_SYS_RAWIO"
                   "CAP_SYS_ADMIN"
+                  # mdadm --create makes the new array's node in /dev: allocating it through sysfs
+                  # (md_mod new_array) is blocked by ProtectKernelTunables, even with that file writable
+                  "CAP_MKNOD"
                 ];
                 NoNewPrivileges = true;
                 ProtectSystem = "strict";
+                # mdadm's map of the arrays it made or assembled (parity pools)
+                ReadWritePaths = [ "-/run/mdadm" ];
                 ProtectHome = true;
                 PrivateTmp = true;
                 ProtectKernelTunables = true;

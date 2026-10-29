@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 )
 
 // Creator turns a blank disk into storage: the same steps the documentation has a person type by hand
@@ -38,6 +39,22 @@ func poolExists(blocks []Block, label string) bool {
 	return found
 }
 
+// poolOnMD: the pool's filesystem sits on an md array (a parity pool, docs/storage-layer.md).
+func poolOnMD(blocks []Block, label string) bool {
+	on := false
+	for _, b := range blocks {
+		walk(b, func(x Block) {
+			if x.Label == label && x.FSType == "btrfs" && (strings.HasPrefix(x.Type, "raid") || x.Type == "md") {
+				on = true
+			}
+		})
+	}
+	return on
+}
+
+// errPoolOnMD: a disk cannot simply be added to a parity pool's filesystem; the array grows instead.
+var errPoolOnMD = refusal{"the pool is a parity pool: add the disk from the storage pools view"}
+
 // Create formats devicePath as the pool, or adds it to the pool if one already exists.
 func (c *Creator) Create(ctx context.Context, devicePath string) error {
 	blocks, err := listBlocks(ctx, c.run)
@@ -45,6 +62,9 @@ func (c *Creator) Create(ctx context.Context, devicePath string) error {
 		return fmt.Errorf("list block devices: %w", err)
 	}
 
+	if poolOnMD(blocks, c.cfg.PoolLabel) {
+		return errPoolOnMD
+	}
 	if poolExists(blocks, c.cfg.PoolLabel) {
 		if _, err := c.run.Run(ctx, "btrfs", "device", "add", "-f", "--", devicePath, c.cfg.PoolMountPoint); err != nil {
 			return fmt.Errorf("add %s to the existing pool: %w", devicePath, err)

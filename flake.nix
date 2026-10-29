@@ -53,7 +53,7 @@
     };
     # UI: ReCasaOS/CasaOS-UI, the Vue 3 dashboard (AGENTS.md §2)
     casaos-ui = {
-      url = "github:ReCasaOS/CasaOS-UI";
+      url = "github:ppenguin/CasaOS-UI-RCOS/recasanix-staging";
       flake = false;
     };
   };

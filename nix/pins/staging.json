@@ -8,7 +8,16 @@
         "feat/raid-alerts-any-backend"
       ],
       "base": "fae7609327016c9bd50394859b5fc38d6a358119",
-      "head": "472f42ef5f53c3e8a355519ed1023bf0403b5e95"
+      "head": "b9bc42d088975edb59d1b7d76ac73528cd0f04fe"
+    },
+    "casaos-ui": {
+      "upstream": "ReCasaOS/CasaOS-UI",
+      "fork": "ppenguin/CasaOS-UI-RCOS",
+      "prs": [
+        "feat/storage-pools"
+      ],
+      "base": "b5a01b5db43d0a8565e3313112156fba49f5ba92",
+      "head": "99c5a5847b2d6474b9bbcdb62173e5e62114bc03"
     }
   },
   "install": "0b4be6f2d8fe993e88c53863c633761a9bdaa114",

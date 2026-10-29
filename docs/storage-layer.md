@@ -121,12 +121,31 @@ Conflicts, options:
   (LocalStorage could implement it for md) vs our own namespace
 - UI: **decision U2**: upstream CasaOS-UI PRs (Storage Manager panel grows: wizard, drive roles) vs a local patch
 
-## 6. Increments
+## 6. As built (I1, I2)
+
+- `/v2/storage`: `GET` (pool, drives, layouts, jobs) · `GET /layouts?disks=` · `POST /plans` · `POST /plans/{id}/apply` · `GET /jobs`
+- one job at a time; plan kept 10 min; apply re-plans and compares the commands (stale → 409)
+- verbs per pool / drive in the view; refusals say why (409 + message)
+- confirmation typed: disks erased (their names), less protection (pool name), mount degraded (pool name)
+- md: array `/dev/md/<label>` (`--name=<label>`), btrfs `-d single -m dup` on it; grow waits for the reshape, then `btrfs filesystem resize max`
+- mount degraded: btrfs = stop the automount unit + `mount -o degraded`; md = `mdadm --run`; until next boot
+- btrfs mounted degraded writes new data with one copy (`single`): replacing a missing / failed member waits
+  for the replace, then soft-converts (`balance -dconvert=<p>,soft`); a pool with data outside its layout and
+  no operation running = `degraded`, tolerates 0, `problem` text, verb `restore-layout` (`/v1/disks/raid` keeps
+  `ok`: every disk is there)
+- md under the storage manager's sandbox: personalities loaded at boot (`raid1`, `raid456`: `ProtectKernelModules`),
+  `/run/mdadm` writable (its map)
+- a failed command's last stderr lines are in the job's `error` and the log
+- v1 `POST /v1/storage` (Create Storage): unchanged for btrfs; refused (409) on a parity pool
+- not yet: partitioning (advanced view), volumes (I3), replace onto a larger disk → resize, md layout change, upstream LocalStorage implementation (md)
+- server texts (summary, steps, notes, refusals): English only; UI chrome: en_US, fr_FR
+
+## 7. Increments
 
 | # | Content | Needs |
 |---|---|---|
 | I0 | RAID state + alerts (done: `GET /v1/disks/raid`, fork `feat/raid-alerts-any-backend`, T11, T17) | — |
-| I1 | engine (model, plan, apply, jobs) + btrfs backend: create pool (single/mirror, N disks), add, replace, remove, change layout, check, mount degraded; upstream RAID panel's Add a disk / Take out mapped to replace/remove | U1 |
-| I2 | UI: pool wizard, drive roles, repair flow | U2 |
+| I1 | **done** — engine (`layout.go`, `pools.go`, `plan.go`, `api_v2.go`): btrfs (none, mirror 2/3) + md (parity 1/2, btrfs on top); verbs create, add, replace, remove, change layout (btrfs), restore layout, check / stop, mount degraded, wipe; T18 | — |
+| I2 | **done (draft)** — CasaOS-UI `feat/storage-pools` (Pool tab, plan dialog), in staging; contract: CasaOS-LocalStorage `feat/storage-layer-api` (`api/storage/openapi.yaml`); T11 phase `layer` | owner tests → PRs out of draft |
 | I3 | volumes (subvolumes) + shares/apps integration, quotas | C1 a |
 | I4 | further backends (mdadm, ZFS) | C4 |

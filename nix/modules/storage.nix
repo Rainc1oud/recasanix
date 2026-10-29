@@ -87,6 +87,21 @@ in
 
       environment.systemPackages = [ pkgs.btrfs-progs ];
 
+      # md RAID (owner decision C4, docs/storage-layer.md): the parity layouts (raid5/6) are md arrays
+      # with the pool's btrfs on top, created at runtime by the storage manager. Arrays assemble from
+      # udev; an array missing a member stays inactive until "Mount degraded" (a runtime decision, as
+      # for btrfs). mdmonitor's events go to the journal; alerts come from the root's alert hub.
+      boot.swraid = {
+        enable = true;
+        mdadmConf = "PROGRAM ${pkgs.util-linux}/bin/logger";
+      };
+      # the personalities loaded at boot: the storage manager runs with ProtectKernelModules, so mdadm
+      # cannot load one when it creates or assembles an array
+      boot.kernelModules = [
+        "raid1"
+        "raid456"
+      ];
+
       # The pool's DATA directory appears at the data root when the pool is present. A mount unit rather
       # than a `fileSystems` entry: with no pool it must be *skipped* (condition), not failed, and it
       # must not trigger the pool's automount (a 10 s wait on a diskless machine) — hence the check on
@@ -104,7 +119,10 @@ in
           };
         }
       ];
-      systemd.tmpfiles.rules = [ "d ${cfg.dataRoot} 0755 root root -" ];
+      systemd.tmpfiles.rules = [
+        "d ${cfg.dataRoot} 0755 root root -"
+        "d /run/mdadm 0700 root root -" # mdadm's map, writable for the storage manager
+      ];
 
       # SMART warnings are an explicit product requirement. Notifications go to the journal only
       # (smartd logs there itself); no mail, no wall, no desktop popups. `-q nodev0` keeps smartd

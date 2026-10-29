@@ -68,6 +68,7 @@ registered with the gateway.
 | `PUT /v1/storage`, `DELETE /v1/storage` | **501** — formatting or removing an existing storage is not supported yet |
 | `GET /v1/disks/raid` | `data: [RAIDArray]` — every multi-device btrfs, in LocalStorage's md shape (below); `[]` without one |
 | `POST /v1/disks/raid/{name}/disks`, `DELETE /v1/disks/raid/{name}/disks/{member}` | **501** — adding a disk to a mirror or taking one out is not available yet |
+| `GET /v2/storage` and below | the storage layer: pool, drives with roles, plan → preview → apply, jobs ([storage-layer.md](./storage-layer.md)) |
 | `GET /v1/disks/usb` | `data: []` — removable media is not supported yet |
 | `GET /v2/local_storage/merge` | `{message, data: []}` — nothing is merged (the v2 format has no `success`) |
 | any other `GET` below those prefixes | 404 |
@@ -184,7 +185,9 @@ mistake (T11 checks the pool's UUID is unchanged after such an attempt).
   `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, kernel/clock/hostname/control-group
   protections, namespaces, real-time and SUID restricted, `MemoryDenyWriteExecute`, address families limited
   to unix and inet, and a capability bounding set of `CAP_DAC_READ_SEARCH` (look at every mount point),
-  `CAP_SYS_RAWIO` and `CAP_SYS_ADMIN` (`smartctl`, mounting).
+  `CAP_SYS_RAWIO` and `CAP_SYS_ADMIN` (`smartctl`, mounting), and `CAP_MKNOD` (`mdadm --create` makes the new
+  array's node; sysfs allocation is blocked by `ProtectKernelTunables`). `/run/mdadm` writable (mdadm's map);
+  md personalities loaded at boot (`ProtectKernelModules`).
 
 ## Known limits
 

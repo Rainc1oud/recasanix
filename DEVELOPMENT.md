@@ -325,8 +325,8 @@ fully offline (no network in the build sandbox).
   `start.d` to that one file.
 - **T1** (`checks.*.unit-*`): sandbox-incompatible upstream tests are skipped by name with a reason in
   `nix/tests/unit.nix` (setuid chmod, root-owned ancestors, Docker daemon, network/app store, systemd).
-  Two things worth knowing: `casaos-ui` has no unit check because upstream's `pnpm test` runs `vitest`, which
-  neither `package.json` nor the lockfile declares; and **upstream finding** — user-service's
+  `unit-casaos-ui` runs upstream's vitest suite (locked since the Vue 3 port) on the UI as built. Worth
+  knowing: **upstream finding** — user-service's
   `TestRefreshRotationHandlerFlow` (and, with a nil-pointer panic in `PostUserRefreshToken`, `TestLogoutAllRetiresEverySession`) fail in ~90% of rapid repeated runs (`-count=200`): the token rotated
   before a replay is still accepted afterwards when everything happens within one wall-clock second, i.e. a
   probable second-granularity race in session-family revocation (`service/session.go`). It is skipped to keep the
@@ -861,6 +861,7 @@ GitLab CI later). All of these must run without hardware.
 | T14 | [x] | `checks.<sys>.smb-ui` | Headless Chromium: Files → Shared → Share accounts → add; right-click a folder → Share → only that account; API, ownership and smbclient agree |
 | T15 | [x] | `checks.<sys>.image-modules` | Modules of the image (`[server] ImageManaged`, CasaOS image provider): demo module in `services.recasaos.imageModules`; list → plan → install (flag, unit started through PATH systemctl, route answers) → started at boot → update `up_to_date` → remove (stopped, flag gone) → not started at boot |
 | T16 | [x] | `checks.<sys>.virt-module` | virt module (modules.env pin, built in the image): enabled from the Modules page → libvirt available (socket-activated), UEFI firmware, VM network + its iptables chains, route answers; removed → stopped, not started at boot |
+| T18 | [x] | `checks.<sys>.storage-layer` | `/v2/storage` on real disks, two VMs. btrfs: mirror → add → 3 copies → replace → 2 copies → remove → wipe foreign → member unplugged → replace → unmounted with a disk gone → mount degraded → replace. md: parity (RAID 5) → grow → failed member → replace → missing at assembly → inactive → mount degraded → replace. Wrong confirmations change nothing; data checksummed throughout |
 | T17 | [x] | `checks.<sys>.storage-alerts` | RAID alerts for the btrfs pool: root's alert hub (fork `feat/raid-alerts-any-backend`) → gateway route → `recasanix-storage` with the internal secret (reads only; write → 401) → mirror member unplugged → "degraded" at a loopback webhook → error counters grow → "new errors"; ~11 min (upstream 5-min poll) |
 
 ### T1 — Component unit tests
@@ -1100,8 +1101,8 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.3 | [x] | module: `SambaMainConfig = external`, `ImageManaged = true` + `ModuleCatalogue` (empty image catalogue, store), `FirstAdmin = local`, telemetry-off marker; bootstrap oneshot + `reset-password` via `-ru` |
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
-| R.6 | [x] | `nix flake check` green on the org base (T1–T17; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57; staging: `feat/raid-alerts-any-backend` (PR later) |
+| R.6 | [x] | `nix flake check` green on the org base (T1–T18; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
+| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57; staging: `feat/raid-alerts-any-backend`, UI `feat/storage-pools` (PRs later, drafts) |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 
@@ -1115,7 +1116,7 @@ Recorded so nobody picks them up early, and so the phase-1 work stays shaped for
 | Podman evaluation | Re-test app-store compatibility against `virtualisation.podman.dockerCompat`. |
 | ZFS variant | Commented block from 2.1; flip and run T3 against it. |
 | Signing infrastructure | Cert chain and key rotation for RAUC bundles. |
-| **Storage layer (owner decision (b))** | **Targeted for the first release in more or less full functionality — revisit its maturity in time; do not let the prototype's by-hand steps stand in for it.** *Task 3.4 already covers listing, and creating a new pool or extending it (JBOD, whole-disk, single-profile). What remains here*: **repair/replace a disk, a mirror (or converting single→raid1) as a real UI choice**, `degraded` mount as an explicit operation, format/remove an *existing* storage, surface SMART (scrub/degraded/replace state: done, `GET /v1/disks/raid`), RAID alerts (root's CasaOS#59 reads md only), later removable media (deferred, reinstated as native units) — on the same routes, same validate-against-a-fresh-listing discipline, same argument-vector-only rule. Tests: extend `storage-manager.nix` (T11) rather than starting a new suite — it already has the fixtures, the token flow and the browser wiring. |
+| **Storage layer (owner decision (b))** | **Targeted for the first release in more or less full functionality — revisit its maturity in time; do not let the prototype's by-hand steps stand in for it.** *Task 3.4 already covers listing, and creating a new pool or extending it (JBOD, whole-disk, single-profile). What remains here*: *Increments I1+I2 done (2026-10-29, [docs/storage-layer.md](docs/storage-layer.md))*: backend-neutral engine (`/v2/storage`: create / add / replace / remove / change layout / check / mount degraded / wipe; btrfs + md for parity), Pool tab in the UI (fork, draft), alerts for btrfs (T17). **Remaining**: volumes (subvolumes, I3), partitioning (advanced view), format/remove an *existing* storage, later removable media (deferred, reinstated as native units) — on the same routes, same validate-against-a-fresh-listing discipline, same argument-vector-only rule. Tests: extend `storage-manager.nix` (T11) rather than starting a new suite — it already has the fixtures, the token flow and the browser wiring. |
 | First-run UX | Setup wizard, factory reset. |
 | SMB/shares hardening | Upstream's SMB-credential admission units are shipped but unexercised by tests. |
 | Git apps (reconsider) | Hidden (UI patch `0001-hide-git-apps.patch`, owner decision 2026-10-23: build on the box + inbound redeploy webhook = attack surface). Upstream keeps improving them (v0.5.54–57: `COMPOSE_FILE`/`COMPOSE_PROFILES`, `.env`, private registries) → revisit later; routes still in app management. |

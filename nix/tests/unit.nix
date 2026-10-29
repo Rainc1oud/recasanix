@@ -135,8 +135,17 @@ in
       ])
     ];
   };
-}
 
-# unit-casaos-ui is intentionally absent: upstream's `pnpm test` runs `vitest`, which neither
-# package.json nor pnpm-lock.yaml declares (only an eslint plugin references it), so the two existing
-# spec files cannot run from the locked dependencies. Revisit when upstream adds it (register: TODO).
+  # upstream's `pnpm test` (vitest, locked since the Vue 3 port), from the locked offline deps, on the
+  # source as built (staging branches and local patches included)
+  unit-casaos-ui = pkgs.casaos-ui.overrideAttrs {
+    name = "unit-casaos-ui"; # pname stays: the unfree allowance is by package name
+    buildPhase = ''
+      runHook preBuild
+      pnpm exec vitest run
+      runHook postBuild
+    '';
+    installPhase = "mkdir -p $out";
+    dontFixup = true;
+  };
+}

@@ -33,7 +33,7 @@ GEAR = (
 )
 
 failures = []
-storage_tab = drive_tab = toast_text = creating = create_form = None
+storage_tab = drive_tab = toast_text = creating = create_form = pool_tab = plan_text = pool_default = None
 
 
 def check(condition, message):
@@ -65,6 +65,32 @@ try:
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(3000)
 
+        if phase != "layer":
+            # where the storage layer answers, its Pool tab opens first: these phases read the Storage tab
+            modal.get_by_text("Storage", exact=True).first.click()
+            page.wait_for_timeout(800)
+        if phase == "layer":
+            # the storage layer's tab is there and selected (GET /v2/storage answers)
+            pool_default = "Mirror, 2 copies" in modal.inner_text()
+            modal.get_by_text("Pool", exact=True).first.click()
+            page.wait_for_timeout(800)
+            pool_tab = modal.inner_text()
+            print("--- Pool tab ---\n" + pool_tab)
+            modal.get_by_role("button", name="Check now", exact=True).click()
+            plan = page.locator(".storage-plan")
+            plan.wait_for(state="visible", timeout=15000)
+            apply = plan.get_by_role("button", name="Apply", exact=True)
+            apply.wait_for(state="visible", timeout=15000)
+            page.wait_for_timeout(500)
+            plan_text = plan.inner_text()
+            apply.click()
+            toast = page.locator(".toast").first
+            toast.wait_for(state="visible", timeout=15000)
+            toast_text = toast.inner_text()
+            page.wait_for_timeout(1000)
+            modal.get_by_text("Storage", exact=True).first.click()
+            page.wait_for_timeout(800)
+
         storage_tab = modal.inner_text()
         modal.get_by_text("Drive", exact=True).first.click()
         page.wait_for_timeout(1500)
@@ -92,18 +118,18 @@ try:
         browser.close()
 except Exception:
     print('STEP FAILED; what was seen so far:')
-    print('panel requests:', [e for e in log if any(x in e[2] for x in ('/v1/disks', '/v1/storage', '/v2/local_storage'))])
+    print('panel requests:', [e for e in log if any(x in e[2] for x in ('/v1/disks', '/v1/storage', '/v2/local_storage', '/v2/storage'))])
     print('--- Storage tab ---\n' + str(storage_tab))
     print('--- Drive tab ---\n' + str(drive_tab))
     raise
 
-panel_calls = [e for e in log if any(s in e[2] for s in ("/v1/disks", "/v1/storage", "/v2/local_storage"))]
+panel_calls = [e for e in log if any(s in e[2] for s in ("/v1/disks", "/v1/storage", "/v2/local_storage", "/v2/storage"))]
 print("panel requests:", panel_calls)
 print("--- Storage tab ---\n" + storage_tab)
 print("--- Drive tab ---\n" + drive_tab)
 
 # the requests the panel makes are answered
-for needle in ("/v1/disks", "/v1/storage", "/v2/local_storage/merge", "/v1/disks/raid"):
+for needle in ("/v1/disks", "/v1/storage", "/v2/local_storage/merge", "/v1/disks/raid", "/v2/storage"):
     calls = [e for e in panel_calls if needle in e[2] and e[0] == "GET"]
     check(calls, f"the panel never asked for {needle}")
     check(all(e[1] == 200 for e in calls), f"{needle} was answered {[e[1] for e in calls]}")
@@ -126,6 +152,18 @@ elif phase == "degraded":
     check("recasanix-data" in storage_tab, "the Storage tab does not show the pool")
     check("RAID 1" in storage_tab, "the pool does not read RAID 1")
     check("Degraded" in storage_tab, "the mirror missing a disk does not read Degraded")
+elif phase == "layer":
+    print("--- plan ---\n" + str(plan_text))
+    print("--- toast ---\n" + str(toast_text))
+    check(pool_default, "the Pool tab is not the one open first")
+    check("Mirror, 2 copies" in str(pool_tab), "the Pool tab does not name the layout")
+    check("No disk may fail" in str(pool_tab), "the Pool tab does not say the degraded mirror has no protection left")
+    check("Degraded" in str(pool_tab) and "Missing" in str(pool_tab), "the Pool tab does not show the unplugged disk as missing")
+    check("Check every block of the pool" in str(plan_text) and "btrfs scrub start" not in str(plan_text),
+          "the plan preview is not shown, or shows the commands unasked")
+    check(toast_text and "Started" in toast_text, "applying the plan did not say it started")
+    applies = [e for e in log if "/v2/storage/plans/" in e[2] and e[2].endswith("/apply")]
+    check(applies and all(e[1] == 202 for e in applies), f"apply was answered {applies}")
 else:
     failures.append(f"unknown phase {phase}")
 

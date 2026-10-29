@@ -274,5 +274,10 @@ pkgs.testers.runNixOSTest {
     gone = [m for m in a["members"] if m["name"] == "vdc"]
     assert a["missing"] == 1 and a["disks"] == 2 and gone and gone[0]["state"] == "faulty", a
     browser("degraded")
+
+    # the storage layer's Pool tab (CasaOS-UI feat/storage-pools, in staging): the degraded mirror,
+    # and a plan made, previewed and applied from the browser (a check: changes no data)
+    browser("layer")
+    machine.wait_until_succeeds("btrfs scrub status /var/lib/recasanix/data | grep -qi 'running\\|finished\\|no stats\\|aborted'")
   '';
 }

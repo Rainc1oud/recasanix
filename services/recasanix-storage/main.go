@@ -67,7 +67,9 @@ func run(log *slog.Logger, runtimeDir, listen string, cfg Config) error {
 
 	runner := execRunner{timeout: 10 * time.Second}
 	inv := newInventory(cfg, runner, newSmartReader(runner, 5*time.Minute))
-	api := &API{inv: inv, creator: newCreator(runner, cfg), log: log}
+	// the storage layer's steps: no short timeout (mkfs on large disks, moving a disk's data off it)
+	steps := execRunner{timeout: 48 * time.Hour}
+	api := &API{inv: inv, creator: newCreator(runner, cfg), planner: newPlanner(inv, steps, cfg, log), log: log}
 	auth := newAuthenticator(newJWKSKeys(runtimeDir)).withInternalSecret(runtimeDir)
 
 	srv := &http.Server{
