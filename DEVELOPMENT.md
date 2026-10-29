@@ -1092,7 +1092,7 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
 | R.6 | [x] | `nix flake check` green on the org base (T1–T16; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.51, staging empty |
+| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57, staging empty |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 
@@ -1109,3 +1109,4 @@ Recorded so nobody picks them up early, and so the phase-1 work stays shaped for
 | **Storage layer (owner decision (b))** | **Targeted for the first release in more or less full functionality — revisit its maturity in time; do not let the prototype's by-hand steps stand in for it.** *Task 3.4 already covers listing, and creating a new pool or extending it (JBOD, whole-disk, single-profile). What remains here*: **repair/replace a disk, a mirror (or converting single→raid1) as a real UI choice**, `degraded` mount as an explicit operation, format/remove an *existing* storage, surface SMART and scrub state, later removable media (deferred, reinstated as native units) — on the same routes, same validate-against-a-fresh-listing discipline, same argument-vector-only rule. Tests: extend `storage-manager.nix` (T11) rather than starting a new suite — it already has the fixtures, the token flow and the browser wiring. |
 | First-run UX | Setup wizard, factory reset. |
 | SMB/shares hardening | Upstream's SMB-credential admission units are shipped but unexercised by tests. |
+| Git apps (reconsider) | Hidden (UI patch `0001-hide-git-apps.patch`, owner decision 2026-10-23: build on the box + inbound redeploy webhook = attack surface). Upstream keeps improving them (v0.5.54–57: `COMPOSE_FILE`/`COMPOSE_PROFILES`, `.env`, private registries) → revisit later; routes still in app management. |

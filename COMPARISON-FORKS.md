@@ -20,7 +20,7 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 - lost vs EF: public-files portal (EF-only, not used), chosen-password reset (ORG `-ru` = random password)
 - file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, ReCasaOS/CasaOS#49, merged)
 
-### PRs (ORG), state 2026-10-26: all merged; pins at release v0.5.51, staging empty
+### PRs (ORG), state 2026-10-26: all merged; pins at release v0.5.57, staging empty
 
 | Repo | PR | Branch | Content | Kind | State |
 |---|---|---|---|---|---|

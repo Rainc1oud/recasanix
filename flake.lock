@@ -19,11 +19,11 @@
     "casaos-ui": {
       "flake": false,
       "locked": {
-        "lastModified": 1792925990,
-        "narHash": "sha256-wEvGD3v8My88TZaHn9KV8OX5LYuXrFYU/9GLL/H5Thk=",
+        "lastModified": 1793190471,
+        "narHash": "sha256-mDUQa+bHJGEi7Aj3LmGmFOclTw2b7d5nzGkq9ptLlx4=",
         "owner": "ReCasaOS",
         "repo": "CasaOS-UI",
-        "rev": "ffd72efa78df4319fafad46f19d607d08a456520",
+        "rev": "b5a01b5db43d0a8565e3313112156fba49f5ba92",
         "type": "github"
       },
       "original": {
@@ -106,11 +106,11 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1792864280,
-        "narHash": "sha256-JPOFW/mCoSPlyMOd9WfNqi+YOVIO4i59/hJdHJK25Jo=",
+        "lastModified": 1793121569,
+        "narHash": "sha256-X3CsfXOIEYUMt21aloTncjBjnkzvIwR/ipPM2kMA7qk=",
         "owner": "ReCasaOS",
         "repo": "CasaOS",
-        "rev": "a53271140970b5278999ae29e56b15dd57928a38",
+        "rev": "fae7609327016c9bd50394859b5fc38d6a358119",
         "type": "github"
       },
       "original": {
@@ -122,11 +122,11 @@
     "recasaos-app-management": {
       "flake": false,
       "locked": {
-        "lastModified": 1792863654,
-        "narHash": "sha256-psbBsBIfp20/Ek0RvvVYzeMXiHPiXLDI5gPbbrAaiRk=",
+        "lastModified": 1793190475,
+        "narHash": "sha256-Ndbi3/tEZJ0fXiXp/XJg56VCuxUxNJVafdvs6o+Zi3I=",
         "owner": "ReCasaOS",
         "repo": "CasaOS-AppManagement",
-        "rev": "b15e1690011d7ec83312cde7c089ef2298902ebd",
+        "rev": "04c765eac3ee52366e28c7ed2350eb5489731471",
         "type": "github"
       },
       "original": {
@@ -154,11 +154,11 @@
     "recasaos-install": {
       "flake": false,
       "locked": {
-        "lastModified": 1792928600,
-        "narHash": "sha256-ji0S72ncCxev07XuO3iiQ4TlqvXAUUnJZjsAB+t3Ats=",
+        "lastModified": 1793190770,
+        "narHash": "sha256-ENGcqdLhB/pIjf1W918alZWhEfPEbS9VSGYAEAl52sA=",
         "owner": "ReCasaOS",
         "repo": "CasaOS-Install",
-        "rev": "0aefe00f2bf4536eb119fe6e322b615741df9cdb",
+        "rev": "0b4be6f2d8fe993e88c53863c633761a9bdaa114",
         "type": "github"
       },
       "original": {
