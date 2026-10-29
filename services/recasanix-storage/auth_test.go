@@ -257,3 +257,47 @@ func TestUserServiceAddressMustBeLoopback(t *testing.T) {
 }
 
 var _ = json.Marshal
+
+func TestInternalSecretIsForReadsOnly(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, serviceTokenFile), []byte("s3cret-per-boot\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	priv := newKey(t)
+	a := newAuthenticator(staticKey{key: &priv.PublicKey}).withInternalSecret(dir)
+	check := func(method, header string) error {
+		r := httptest.NewRequest(method, "/v1/disks/raid", nil)
+		r.Header.Set("Authorization", header)
+		return a.Authenticate(r)
+	}
+	for _, m := range []string{"GET", "HEAD"} {
+		if err := check(m, "Internal s3cret-per-boot"); err != nil {
+			t.Errorf("%s with the internal secret: %v", m, err)
+		}
+	}
+	for _, c := range []struct{ method, header string }{
+		{"POST", "Internal s3cret-per-boot"},   // a write needs a user
+		{"DELETE", "Internal s3cret-per-boot"}, //
+		{"GET", "Internal wrong"},
+		{"GET", "Internal "},
+		{"GET", "Bearer s3cret-per-boot"}, // the secret is not a token
+	} {
+		if err := check(c.method, c.header); err == nil {
+			t.Errorf("%s %q accepted", c.method, c.header)
+		}
+	}
+	// no secret file (gateway not up): nothing matches, not even an empty one
+	if err := os.Remove(filepath.Join(dir, serviceTokenFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := check("GET", "Internal "); err == nil {
+		t.Error("empty secret accepted without a file")
+	}
+	// without withInternalSecret the scheme is refused
+	b := newAuthenticator(staticKey{key: &priv.PublicKey})
+	r := httptest.NewRequest("GET", "/v1/disks", nil)
+	r.Header.Set("Authorization", "Internal s3cret-per-boot")
+	if b.Authenticate(r) == nil {
+		t.Error("internal secret accepted by an authenticator without one")
+	}
+}

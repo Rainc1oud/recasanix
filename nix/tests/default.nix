@@ -32,5 +32,6 @@
   docker = import ./docker.nix { inherit pkgs modules; };
   app-lifecycle = import ./app-lifecycle.nix { inherit pkgs modules; };
   storage-manager = import ./storage-manager.nix { inherit pkgs modules; };
+  storage-alerts = import ./storage-alerts.nix { inherit pkgs modules; };
   image-boots = import ./image-boots.nix { inherit pkgs image; };
 }

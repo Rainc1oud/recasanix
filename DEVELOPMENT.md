@@ -861,6 +861,7 @@ GitLab CI later). All of these must run without hardware.
 | T14 | [x] | `checks.<sys>.smb-ui` | Headless Chromium: Files → Shared → Share accounts → add; right-click a folder → Share → only that account; API, ownership and smbclient agree |
 | T15 | [x] | `checks.<sys>.image-modules` | Modules of the image (`[server] ImageManaged`, CasaOS image provider): demo module in `services.recasaos.imageModules`; list → plan → install (flag, unit started through PATH systemctl, route answers) → started at boot → update `up_to_date` → remove (stopped, flag gone) → not started at boot |
 | T16 | [x] | `checks.<sys>.virt-module` | virt module (modules.env pin, built in the image): enabled from the Modules page → libvirt available (socket-activated), UEFI firmware, VM network + its iptables chains, route answers; removed → stopped, not started at boot |
+| T17 | [x] | `checks.<sys>.storage-alerts` | RAID alerts for the btrfs pool: root's alert hub (fork `feat/raid-alerts-any-backend`) → gateway route → `recasanix-storage` with the internal secret (reads only; write → 401) → mirror member unplugged → "degraded" at a loopback webhook → error counters grow → "new errors"; ~11 min (upstream 5-min poll) |
 
 ### T1 — Component unit tests
 
@@ -1099,8 +1100,8 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.3 | [x] | module: `SambaMainConfig = external`, `ImageManaged = true` + `ModuleCatalogue` (empty image catalogue, store), `FirstAdmin = local`, telemetry-off marker; bootstrap oneshot + `reset-password` via `-ru` |
 | R.4 | [x] | guardrail register (T9) re-audited for the org; local patches: helper.sh strip, local-storage listener |
 | R.5 | [x] | recasanix-storage: gateway via internal secret; tokens bare or Bearer |
-| R.6 | [x] | `nix flake check` green on the org base (T1–T16; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
-| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57, staging empty |
+| R.6 | [x] | `nix flake check` green on the org base (T1–T17; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
+| R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57; staging: `feat/raid-alerts-any-backend` (PR later) |
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 

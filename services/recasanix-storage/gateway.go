@@ -62,6 +62,15 @@ func (g *gatewayClient) readSmallFile(name string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
+// internalSecret is the gateway's current internal secret.
+func (g *gatewayClient) internalSecret() (string, error) {
+	token, err := g.readSmallFile(serviceTokenFile)
+	if err != nil || token == "" {
+		return "", errors.New("gateway service token is not available")
+	}
+	return token, nil
+}
+
 // do sends one authenticated management request. Address and token are read on every call, so a
 // gateway restart (new port, new token) is picked up without restarting this service.
 func (g *gatewayClient) do(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
@@ -69,9 +78,9 @@ func (g *gatewayClient) do(ctx context.Context, method, path string, body []byte
 	if err != nil {
 		return nil, fmt.Errorf("gateway management address: %w", err)
 	}
-	token, err := g.readSmallFile(serviceTokenFile)
-	if err != nil || token == "" {
-		return nil, errors.New("gateway service token is not available")
+	token, err := g.internalSecret()
+	if err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, strings.TrimSuffix(base, "/")+path, bytes.NewReader(body))
 	if err != nil {

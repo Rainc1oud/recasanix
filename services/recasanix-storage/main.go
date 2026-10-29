@@ -68,7 +68,7 @@ func run(log *slog.Logger, runtimeDir, listen string, cfg Config) error {
 	runner := execRunner{timeout: 10 * time.Second}
 	inv := newInventory(cfg, runner, newSmartReader(runner, 5*time.Minute))
 	api := &API{inv: inv, creator: newCreator(runner, cfg), log: log}
-	auth := newAuthenticator(newJWKSKeys(runtimeDir))
+	auth := newAuthenticator(newJWKSKeys(runtimeDir)).withInternalSecret(runtimeDir)
 
 	srv := &http.Server{
 		Handler:           auth.Middleware(api.Handler()),

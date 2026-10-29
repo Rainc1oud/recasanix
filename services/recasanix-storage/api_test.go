@@ -71,7 +71,7 @@ func TestDisksEndpoint(t *testing.T) {
 	}
 	blank := avail[0].(map[string]any)
 	// every field the UI reads is present, with the type it expects
-	for _, f := range []string{"name", "size", "model", "health", "temperature", "disk_type", "need_format", "serial", "path", "children_number", "children", "supported"} {
+	for _, f := range []string{"name", "size", "model", "health", "smart_status", "temperature", "disk_type", "need_format", "serial", "path", "children_number", "children", "supported"} {
 		if _, ok := blank[f]; !ok {
 			t.Errorf("drive lacks %q", f)
 		}

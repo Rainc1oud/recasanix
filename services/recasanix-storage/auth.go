@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,9 @@ import (
 //     token.
 //   - there is no loopback exemption. This service listens on loopback only, but any local process can
 //     reach that, and so "it came from localhost" is not an identity.
+//   - the stack's own callers (the root service's alerts) send the gateway's per-boot internal secret
+//     (`Authorization: Internal <secret>`, owner-only file): accepted for reads (GET, HEAD) only. A
+//     write needs a user's token.
 const (
 	accessTokenIssuer = "casaos"
 	jwksPath          = ".well-known/jwks.json"
@@ -50,9 +54,18 @@ type keySource interface {
 // Authenticator validates the bearer token of a request.
 type Authenticator struct {
 	keys keySource
+	// internal yields the gateway's current internal secret; nil: not accepted.
+	internal func() (string, error)
 }
 
 func newAuthenticator(keys keySource) *Authenticator { return &Authenticator{keys: keys} }
+
+// withInternalSecret accepts the internal secret the gateway writes into runtimeDir, read on every
+// request (a gateway restart makes a new one).
+func (a *Authenticator) withInternalSecret(runtimeDir string) *Authenticator {
+	a.internal = newGatewayClient(runtimeDir).internalSecret
+	return a
+}
 
 type accessClaims struct {
 	jwt.RegisteredClaims
@@ -63,7 +76,11 @@ type accessClaims struct {
 // Authenticate reports whether the request carries a valid access token. Every failure is the same
 // error: the caller must not be able to tell a bad signature from an expired token.
 func (a *Authenticator) Authenticate(r *http.Request) error {
-	raw := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	header := r.Header.Get("Authorization")
+	if presented, ok := strings.CutPrefix(header, "Internal "); ok {
+		return a.authenticateInternal(r, presented)
+	}
+	raw := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 	if raw == "" {
 		return errUnauthorized
 	}
@@ -80,6 +97,19 @@ func (a *Authenticator) Authenticate(r *http.Request) error {
 	}
 	// jwt validates exp only when present; a token that never expires is not one we issued.
 	if claims.ExpiresAt == nil || claims.Issuer != accessTokenIssuer {
+		return errUnauthorized
+	}
+	return nil
+}
+
+// authenticateInternal: the internal secret, for a read only.
+func (a *Authenticator) authenticateInternal(r *http.Request, presented string) error {
+	if a.internal == nil || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		return errUnauthorized
+	}
+	secret, err := a.internal()
+	presented = strings.TrimSpace(presented)
+	if err != nil || secret == "" || subtle.ConstantTimeCompare([]byte(presented), []byte(secret)) != 1 {
 		return errUnauthorized
 	}
 	return nil

@@ -100,7 +100,7 @@ func TestDisksOnAVMWithABlankDisk(t *testing.T) {
 	if blank.Children == nil {
 		t.Fatal("children must be an empty list, not null: the UI iterates it")
 	}
-	if blank.Health != "true" || blank.Temperature != 0 {
+	if blank.Health != "true" || blank.SmartStatus != "unavailable" || blank.Temperature != 0 {
 		t.Fatalf("a disk that does not answer SMART must not look failing: %+v", blank)
 	}
 }
@@ -323,5 +323,17 @@ func TestTooSmallDisksAreNotOffered(t *testing.T) {
 	}
 	if got := names(avail); len(got) != 1 || got[0] != "sdb" {
 		t.Fatalf("avail = %v, want only the disk at or above the minimum size", got)
+	}
+}
+
+func TestSmartStatusIsUpstreamsVerdict(t *testing.T) {
+	for info, want := range map[smartInfo]string{
+		{Known: false}:              "unavailable",
+		{Known: true, Passed: true}: "passed",
+		{Known: true}:               "failed",
+	} {
+		if got := smartStatus(info); got != want {
+			t.Errorf("%+v: %q, want %q", info, got, want)
+		}
 	}
 }

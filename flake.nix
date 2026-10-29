@@ -15,14 +15,14 @@
     # - pin of record: CasaOS-Install release/components.env (tag + commit per component)
     # - component with open upstream PRs: our fork's `recasanix-staging` = pin + PRs merged
     #   (nix/pins/staging.json; update.sh locks the fork's head) → post-merge preview
-    # - URLs below: upstream (no open PRs since release v0.5.50)
+    # - URLs below: upstream, except a component with open PRs (its fork's staging branch)
     # - other components: upstream, at the commit of components.env
     recasaos-install = {
       url = "github:ReCasaOS/CasaOS-Install";
       flake = false;
     };
     recasaos = {
-      url = "github:ReCasaOS/CasaOS";
+      url = "github:ppenguin/CasaOS-RCOS/recasanix-staging";
       flake = false;
     };
     # Go dependency of every service (go.mod); our staging only while it has open PRs of ours

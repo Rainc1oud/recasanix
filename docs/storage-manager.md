@@ -73,7 +73,7 @@ registered with the gateway.
 | any other `GET` below those prefixes | 404 |
 | any other method below those prefixes | **501**, with a message naming what is not supported |
 
-`Drive`: `name, size, model, health, temperature, disk_type, need_format, serial, path, children_number,
+`Drive`: `name, size, model, health, smart_status (passed/failed/unavailable: the root's disk alerts), temperature, disk_type, need_format, serial, path, children_number,
 children[{name,size,format,supported}], supported`. `Volume`: `uuid, mount_point, size, avail, used, type, path,
 drive_name, label, persisted_in` — **the sizes are strings**, as the UI has always received them.
 `POST /v1/storage`'s `name` field is accepted and **ignored**: there is one pool, under a fixed label, not
@@ -124,7 +124,9 @@ appliance's btrfs pool (JBOD or mirror).
   output parsed (its scrub status has no progress while running)
 - member `errors`: the kernel's error counters summed (not in LocalStorage's shape; the UI ignores it)
 - single-device btrfs: no array (as a disk without md)
-- not covered: root's RAID alerts (CasaOS#59) read md only → no alert for a degraded btrfs yet
+- alerts: root's alert hub (CasaOS#59) polls this route every 5 min; fork branch `feat/raid-alerts-any-backend`
+  (in staging, PR later): member without a disk named, no "()" for an unknown level, alert when a member's
+  `errors` grow (T17)
 
 ## Creating storage
 
@@ -163,6 +165,9 @@ mistake (T11 checks the pool's UUID is unchanged after such an attempt).
 
 ## Security
 
+- **The stack's own reads**: the root's alert hub sends the gateway's per-boot internal secret
+  (`Authorization: Internal <secret>`, owner-only file, read per request): accepted for `GET`/`HEAD` only; a
+  write needs a user's token (T17).
 - **Same rules as the ReCasaOS root service**: the ES256 JWT in `Authorization`, bare (as the dashboard
   sends it) or `Bearer <token>` (never a query string), verified against the key the user service publishes as JWKS; the token must expire and the issuer
   must be `casaos` (a **refresh token is refused**); no other algorithm. **No loopback exemption**: it

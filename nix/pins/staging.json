@@ -1,6 +1,16 @@
 {
   "branch": "recasanix-staging",
-  "components": {},
+  "components": {
+    "recasaos": {
+      "upstream": "ReCasaOS/CasaOS",
+      "fork": "ppenguin/CasaOS-RCOS",
+      "prs": [
+        "feat/raid-alerts-any-backend"
+      ],
+      "base": "fae7609327016c9bd50394859b5fc38d6a358119",
+      "head": "472f42ef5f53c3e8a355519ed1023bf0403b5e95"
+    }
+  },
   "install": "0b4be6f2d8fe993e88c53863c633761a9bdaa114",
   "common_version": "v0.4.31"
 }

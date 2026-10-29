@@ -20,7 +20,7 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 - lost vs EF: public-files portal (EF-only, not used), chosen-password reset (ORG `-ru` = random password)
 - file-root confinement: ORG confined only shares → EF's boundary ported (`[file] ManagementRoots`, ReCasaOS/CasaOS#49, merged)
 
-### PRs (ORG), state 2026-10-26: all merged; pins at release v0.5.57, staging empty
+### PRs (ORG), state 2026-10-26: all merged; pins at release v0.5.57; staging: CasaOS `feat/raid-alerts-any-backend` (not yet a PR)
 
 | Repo | PR | Branch | Content | Kind | State |
 |---|---|---|---|---|---|
@@ -37,6 +37,7 @@ Assessed 2026-10-07, both at `main` HEAD. Code-read, nothing built.
 | CasaOS | #53 | `feat/image-managed` | `ImageManaged` + `ModuleProvider` + image provider (#44, #47) | neutral / NixOS | merged, v0.5.50 |
 | CasaOS-UserService | #6 | `feat/first-admin-local` | `FirstAdmin = local`, `-bootstrap-admin`; `-ru` one UPDATE | security, opt-in | merged, v0.5.50 |
 | CasaOS-UI | #55 | `feat/image-managed-ui` | package row on `image_managed`; welcome on `first_admin: local` | neutral | merged, v0.5.50 |
+| CasaOS | — | `feat/raid-alerts-any-backend` | RAID alerts for any backend (btrfs): unnamed member, unknown level, growing `errors` | feature | staging (PR later) |
 | Gateway, UserService, AppManagement, MessageBus, CasaOS, LocalStorage, VirtManagement | #3, #7, #18, #6, #54, #6, #6 | `feat/bearer-authorization` | `Bearer <token>` accepted (#46) | interop | merged, v0.5.50 |
 
 - org CI `no-ai-attribution`: commits/PR text carry no AI attribution lines (owner decision 2026-10-24, from now on)

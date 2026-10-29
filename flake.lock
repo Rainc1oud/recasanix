@@ -106,16 +106,17 @@
     "recasaos": {
       "flake": false,
       "locked": {
-        "lastModified": 1793121569,
-        "narHash": "sha256-X3CsfXOIEYUMt21aloTncjBjnkzvIwR/ipPM2kMA7qk=",
-        "owner": "ReCasaOS",
-        "repo": "CasaOS",
-        "rev": "fae7609327016c9bd50394859b5fc38d6a358119",
+        "lastModified": 1793267360,
+        "narHash": "sha256-xY0R8oIvzR7NCG43dfGWG27YsOI8tvzqfqJ9KiNsZio=",
+        "owner": "ppenguin",
+        "repo": "CasaOS-RCOS",
+        "rev": "472f42ef5f53c3e8a355519ed1023bf0403b5e95",
         "type": "github"
       },
       "original": {
-        "owner": "ReCasaOS",
-        "repo": "CasaOS",
+        "owner": "ppenguin",
+        "ref": "recasanix-staging",
+        "repo": "CasaOS-RCOS",
         "type": "github"
       }
     },

@@ -50,6 +50,7 @@ type Drive struct {
 	Size           uint64      `json:"size"`
 	Model          string      `json:"model"`
 	Health         string      `json:"health"`
+	SmartStatus    string      `json:"smart_status"` // passed, failed or unavailable (the root's disk alerts read it)
 	Temperature    int         `json:"temperature"`
 	DiskType       string      `json:"disk_type"`
 	NeedFormat     bool        `json:"need_format"`
@@ -196,6 +197,19 @@ func health(i smartInfo) string {
 	return "true"
 }
 
+// smartStatus is SMART's verdict as upstream LocalStorage reports it: no answer is "unavailable",
+// neither passed nor failed.
+func smartStatus(i smartInfo) string {
+	switch {
+	case !i.Known:
+		return "unavailable"
+	case i.Passed:
+		return "passed"
+	default:
+		return "failed"
+	}
+}
+
 // Disks returns every physical disk and, separately, those a new storage could be created on.
 func (inv *Inventory) Disks(ctx context.Context) (disks, avail []Drive, err error) {
 	blocks, err := listBlocks(ctx, inv.run)
@@ -214,6 +228,7 @@ func (inv *Inventory) Disks(ctx context.Context) (disks, avail []Drive, err erro
 			Size:           d.Size,
 			Model:          d.Model,
 			Health:         health(info),
+			SmartStatus:    smartStatus(info),
 			Temperature:    info.Temperature,
 			DiskType:       diskType(d),
 			NeedFormat:     len(d.Children) == 0 && d.FSType == "",
