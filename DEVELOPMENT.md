@@ -1104,6 +1104,20 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | R.6 | [x] | `nix flake check` green on the org base (T1–T18; test adaptations: bare/Bearer token, register 403, PUT replaces share fields, org UI labels) |
 | R.7 | [x] | org PRs (COMPARISON-FORKS.md table): all merged (Common#6, #7, #9; UserService#4, #6, #7; CasaOS#42, #49, #53, #54, #55; MessageBus#4, #6, #7; UI#53, #55, #56; Gateway#3, AppManagement#18, LocalStorage#6, VirtManagement#6); pins at release v0.5.57; staging: `feat/raid-alerts-any-backend`, UI `feat/storage-pools` (PRs later, drafts) |
 
+### Next steps (remote scan 2026-11-12, to schedule)
+
+| ID | Status | Task |
+|---|---|---|
+| R.8 | [ ] | **owner input**: answer inkly's review on LocalStorage#10 (2026-11-01, unanswered; org holds RAID 5→6 + delete-array until then): (1) `pool` → `pools[]`? (2) RAID 10 = 4th layout kind or `/v1` only? (3) `api/storage/` = shared contract several backends implement, or LocalStorage API? |
+| R.9 | [ ] | UI#69 `feat/storage-pools` CONFLICTING: upstream reworked the storage manager (UI#163 cards/tables, #157 ZFS tab, #164, #178 ZFS on dashboard) → merge main, re-run vitest + T11 |
+| R.10 | [ ] | re-pin v0.5.57 → v0.5.135 (78 releases); T9 re-audit of new host-management surface: OS upgrade planner (`osplan`/`osreadiness`, CasaOS#103–125, Ubuntu/Debian hops), Docker data move (AppManagement#40), HTTPS port change (Gateway#9, UI#162: writes `gateway.ini`), relay remote access + public app sharing (CasaOS#101, #130, #137, Gateway#10: SNI certs, share listener), fleet master backups (CasaOS#119, AppManagement#49), telemetry `os_variant` (#102), `recasaos*` unit aliases (Gateway#7 et al.), Gateway `address=` wait at boot (#8) |
+| R.11 | [ ] | recasanix-storage vs new LocalStorage `/v1` routes the UI may call: `GET /v1/disks/unreadable` (LS#31), ZFS read-only (LS#27), md create/level/filesystem (LS#12–20), SnapRAID + merge (LS#19, #21, #23) → serve or 501, T11 |
+| R.12 | [ ] | CasaOS#67 (open, inkly): guided replace/add/upgrade for SnapRAID pools = our verb set → offer the plan/apply model there once R.8 settled |
+| R.13 | [ ] | alerts branch `feat/raid-alerts-any-backend` → merge main, PR (owner: when) |
+| R.14 | [ ] | **owner input**: `CAP_MKNOD` on recasanix-storage (mdadm --create); optional `DevicePolicy=closed` + `DeviceAllow=block-*` |
+
+- CasaOS#138 (UI bar empty without `used`): n/a, recasanix-storage always sends `used`
+
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 
 Recorded so nobody picks them up early, and so the phase-1 work stays shaped for them.
