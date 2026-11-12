@@ -1108,7 +1108,8 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 
 | ID | Status | Task |
 |---|---|---|
-| R.8 | [ ] | **owner input**: answer inkly's review on LocalStorage#10 (2026-11-01, unanswered; org holds RAID 5→6 + delete-array until then): (1) `pool` → `pools[]`? (2) RAID 10 = 4th layout kind or `/v1` only? (3) `api/storage/` = shared contract several backends implement, or LocalStorage API? |
+| R.8 | [x] | LocalStorage#10 review answered 2026-11-12 (owner): `pools[]` (ReCasaNix: 0..1 by verbs), `stripe` flag (raid10/raid0), `api/storage/` = shared contract, LocalStorage reference impl; new verb `delete-pool` |
+| R.8a | [ ] | implement R.8: spec (LS#10), engine (`pools[]`, intent `pool`, top-level `verbs`, `stripe`, `delete-pool`), UI#69 (with R.9), T18/T11, spec-conformance test |
 | R.9 | [ ] | UI#69 `feat/storage-pools` CONFLICTING: upstream reworked the storage manager (UI#163 cards/tables, #157 ZFS tab, #164, #178 ZFS on dashboard) → merge main, re-run vitest + T11 |
 | R.10 | [ ] | re-pin v0.5.57 → v0.5.135 (78 releases); T9 re-audit of new host-management surface: OS upgrade planner (`osplan`/`osreadiness`, CasaOS#103–125, Ubuntu/Debian hops), Docker data move (AppManagement#40), HTTPS port change (Gateway#9, UI#162: writes `gateway.ini`), relay remote access + public app sharing (CasaOS#101, #130, #137, Gateway#10: SNI certs, share listener), fleet master backups (CasaOS#119, AppManagement#49), telemetry `os_variant` (#102), `recasaos*` unit aliases (Gateway#7 et al.), Gateway `address=` wait at boot (#8) |
 | R.11 | [ ] | recasanix-storage vs new LocalStorage `/v1` routes the UI may call: `GET /v1/disks/unreadable` (LS#31), ZFS read-only (LS#27), md create/level/filesystem (LS#12–20), SnapRAID + merge (LS#19, #21, #23) → serve or 501, T11 |
