@@ -34,7 +34,7 @@ type envelope struct {
 // v2Envelope is the v2 format: a message and the data, no status field.
 type v2Envelope struct {
 	Message string `json:"message"`
-	Data    any    `json:"data"`
+	Data    any    `json:"data,omitempty"` // absent on a refusal or an error
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

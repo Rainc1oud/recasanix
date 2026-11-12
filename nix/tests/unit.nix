@@ -92,6 +92,10 @@ in
         "TestGetDbSMBCredentialSchemaIntegration"
         # lists casaos* units through systemd, which the sandbox does not run
         "TestPorts"
+        # share members (route/v1/samba_members_flow_test.go, every test): look up host accounts (`bin`,
+        # share accounts) in the system user database; the sandbox's /etc/passwd has neither. Covered by
+        # T13 (smb-shares) in a VM.
+        "^(TestPutSambaUserSharesRefusesAndLeavesEverything|TestPutSambaUserSharesPutsBackWhatItChangedWhenOneFails|TestDeleteSambaUserHandsItsSharesOverBeforeTheAccountGoes|TestDeleteSambaUserKeepsTheAccountWhenASharesRefuses|TestDeleteSambaUserRefusesTheLastMember|TestOnlyShareAccountsCanBeMembers|TestChooseShareOwnerPassesOverTheAccountBeingDeleted|TestChooseShareOwnerPicksOnlyShareAccounts|TestPutSambaUserSharesRefusesAnAccountThatIsNotAShareAccount|TestDeleteSambaUserRefusesAnotherAccountBeforeTouchingAnything|TestDeleteSambaUserSaysTheSharesChangedWhenTheAccountStays|TestTheWalkIsPlannedWithIDsAndStartsAfterUpdateShare|TestNoWalkWhenUpdateShareFails|TestNoWalkWhenALaterShareFails|TestAShareWhoseOwnerIsGoneCanChange|TestNoWalkWhereContainersKeepTheirData|TestReownArgs|TestRunReownWithChown|TestIsMountPoint|TestAFolderGivenToAnotherAccountKeepsItsFiles|TestAGhostOwnersFolderOfAnotherAccountKeepsItsFiles|TestTheWalkOfAShareSkipsTheSharesInside|TestPutSambaShareKeepsAMemberWhoseAccountIsGone|TestAFolderWhoseOwnerIsGoneIsPutBackByNumber|TestTheWalksRunInOrder|TestUnescapeMount)$"
         # OS upgrade and Docker package update (host management, absent here, see excludePackages):
         # runbook/driver scripts expect /bin/mv, rm, apt, dpkg in a Debian layout
         # the OS-upgrade button matrix: minutes under the load of a full `nix flake check` → T1 timeout

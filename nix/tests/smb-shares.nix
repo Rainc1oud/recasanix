@@ -123,6 +123,13 @@ pkgs.testers.runNixOSTest {
     def section(name):
         return machine.succeed(f"awk '/^\\[/{{p = ($0 == \"[{name}]\")}} p' /etc/samba/smb.casa.conf")
 
+    with subtest("the global settings hold with shares in the fragment"):
+        for name, value in {"server signing": ("mandatory", "required"), "security": ("user",), "min protocol": ("smb2", "smb2_02"), "map to guest": ("never",)}.items():
+            got = machine.succeed(f"testparm -s --section-name global --parameter-name '{name}' 2>/dev/null").strip()
+            assert got.lower() in value, f"{name} = {got}"
+        machine.fail("journalctl -u samba-smbd | grep -q 'found in service section'")
+        machine.fail("smbclient -N -L localhost 2>/dev/null | grep -q casa-shares")
+
     with subtest("discovery: WS-Discovery (Windows) and mDNS _smb._tcp (Finder)"):
         machine.wait_for_unit("samba-wsdd.service")
         # wsdd's HTTP endpoint binds to the LAN interface's address, not loopback
@@ -174,7 +181,8 @@ pkgs.testers.runNixOSTest {
     with subtest("lifting the restriction and removing the share return the directory to root"):
         share_id = ok("GET", "/v1/samba/shares")["data"][0]["id"]
         ok("PUT", f"/v1/samba/shares/{share_id}", {"username": "bob"})
-        machine.succeed("test \"$(stat -c '%U %a' /DATA/Media)\" = 'bob 770'")
+        # the owner stays while its account exists (upstream v0.5.1xx, chooseShareOwner); bob writes as it
+        machine.succeed("test \"$(stat -c '%U %a' /DATA/Media)\" = 'alice 770'")
         ok("DELETE", f"/v1/samba/shares/{share_id}")
         machine.succeed("test \"$(stat -c '%U %a' /DATA/Media)\" = 'root 755'")
         ok("DELETE", "/v1/samba/users/alice")

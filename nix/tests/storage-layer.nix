@@ -69,7 +69,9 @@ pkgs.testers.runNixOSTest {
             return r["data"]
 
         def pool(self):
-            return self.view()["pool"]
+            pools = self.view()["pools"]
+            assert len(pools) <= 1, pools  # one pool at most on the appliance
+            return pools[0] if pools else None
 
         def roles(self):
             return {d["name"]: d["role"] for d in self.view()["drives"]}
@@ -121,10 +123,10 @@ pkgs.testers.runNixOSTest {
     # ======================= btrfs ===================================================================
     b = Box(btrfs)
     v = b.view()
-    assert v["pool"] is None and v["busy"] is False, v
+    assert v["pools"] == [] and v["verbs"] == ["create-pool"] and v["busy"] is False, v
     assert b.roles() == {"vda": "system", "vdb": "free", "vdc": "free", "vdd": "free", "vde": "free"}, b.roles()
     code, r = b.call("GET", "/v2/storage/layouts?disks=vdb,vdc")
-    opts = {(o["layout"]["kind"], o["layout"].get("copies", 0) or o["layout"].get("parity", 0)): o for o in r["data"]}
+    opts = {(o["layout"]["kind"], o["layout"].get("copies", 0) or o["layout"].get("parity", 0)): o for o in r["data"] if not o["layout"].get("stripe")}
     assert opts[("mirror", 2)]["possible"] and not opts[("parity", 1)]["possible"], r
 
     # a wrong confirmation changes nothing
@@ -136,6 +138,8 @@ pkgs.testers.runNixOSTest {
     b.apply({"verb": "create-pool", "layout": {"kind": "mirror", "copies": 2}, "disks": ["vdb", "vdc"]})
     p = b.wait("mounted", lambda p: p["mounted"])
     assert p["backend"] == "btrfs" and p["profile"] == "raid1" and p["tolerates"] == 1 and members(p) == ["vdb", "vdc"], p
+    assert p["id"] == "recasanix-data" and "create-pool" not in b.view()["verbs"], p  # one pool at most
+    b.refused({"verb": "check", "pool": "other"}, 'no pool "other"')
     btrfs.succeed("systemctl is-active DATA.mount docker.service casaos.service")
     btrfs.succeed("dd if=/dev/urandom of=/DATA/blob bs=1M count=64 conv=fsync && sha256sum /DATA/blob > /tmp/blob.sum")
 
@@ -179,14 +183,27 @@ pkgs.testers.runNixOSTest {
     stop_pool(btrfs)
     unplug(btrfs, "vdd")
     p = b.wait("inactive", lambda p: p["state"] == "inactive" and not p["mounted"])
-    assert p["verbs"] == ["mount-degraded"], p
+    assert p["verbs"] == ["mount-degraded", "delete-pool"], p
     b.apply({"verb": "mount-degraded"})
     p = b.wait("mounted degraded", lambda p: p["mounted"] and p["state"] == "degraded")
     btrfs.succeed("systemctl is-active DATA.mount docker.service && sha256sum -c /tmp/blob.sum")
     gone = [x["name"] for x in p["members"] if x["state"] == "faulty"]
-    b.apply({"verb": "replace-disk", "member": gone[0], "disks": ["vde"]})
+    b.apply({"verb": "replace-disk", "pool": "recasanix-data", "member": gone[0], "disks": ["vde"]})
     b.wait("whole again", lambda p: p["state"] == "ok" and members(p) == ["vdb", "vde"])
     btrfs.succeed("sha256sum -c /tmp/blob.sum")
+
+    # delete the pool: services stop, disks blank, /DATA empty on the root fs, the services back
+    b.apply({"verb": "delete-pool", "pool": "recasanix-data"})
+    v = b.view()
+    assert v["pools"] == [] and v["verbs"] == ["create-pool"], v
+    assert b.roles() == {"vda": "system", "vdb": "free", "vde": "free"}, b.roles()
+    btrfs.fail("mountpoint -q /DATA")
+    btrfs.succeed("systemctl is-active casaos.service var-lib-recasanix-data.automount")
+    # a new pool right away (the automount is armed again): striped, no protection
+    b.apply({"verb": "create-pool", "layout": {"kind": "none", "stripe": True}, "disks": ["vdb", "vde"]})
+    p = b.wait("striped", lambda p: p["mounted"])
+    assert p["profile"] == "raid0" and p["layout"] == {"kind": "none", "stripe": True} and p["tolerates"] == 0, p
+    btrfs.succeed("systemctl is-active DATA.mount docker.service && test ! -e /DATA/blob && touch /DATA/new")
 
     # ======================= md (parity) =============================================================
     d = Box(md)
@@ -219,7 +236,7 @@ pkgs.testers.runNixOSTest {
     md.succeed("mdadm --stop /dev/md/recasanix-data && wipefs -a /dev/vdb /dev/vdc && udevadm settle")
     md.succeed("for disk in vdd vde vdf; do mdadm --incremental /dev/$disk; done")
     p = d.wait("inactive", lambda p: p["state"] == "inactive" and not p["mounted"])
-    assert p["verbs"] == ["mount-degraded"], p
+    assert p["verbs"] == ["mount-degraded", "delete-pool"], p
     d.apply({"verb": "mount-degraded"})
     p = d.wait("mounted degraded", lambda p: p["mounted"] and p["state"] == "degraded")
     md.succeed("sha256sum -c /tmp/blob.sum")
@@ -227,5 +244,11 @@ pkgs.testers.runNixOSTest {
     p = d.wait("whole again", lambda p: p["state"] == "ok" and p["missing"] == 0)
     assert p["tolerates"] == 1, p
     md.succeed("sha256sum -c /tmp/blob.sum")
+
+    # delete the parity pool: the array stopped, its marks cleared, every disk blank again
+    d.apply({"verb": "delete-pool", "pool": "recasanix-data"})
+    assert d.view()["pools"] == [] and set(d.roles().values()) == {"system", "free"}, d.roles()
+    md.fail("test -e /dev/md/recasanix-data")
+    md.succeed("! mdadm --examine /dev/vdb /dev/vdd /dev/vde /dev/vdf 2>/dev/null | grep -q 'Magic'")
   '';
 }

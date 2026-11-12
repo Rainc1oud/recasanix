@@ -1109,15 +1109,24 @@ Owner decision pending; rationale + PR list: COMPARISON-FORKS.md "Re-assessment 
 | ID | Status | Task |
 |---|---|---|
 | R.8 | [x] | LocalStorage#10 review answered 2026-11-12 (owner): `pools[]` (ReCasaNix: 0..1 by verbs), `stripe` flag (raid10/raid0), `api/storage/` = shared contract, LocalStorage reference impl; new verb `delete-pool` |
-| R.8a | [ ] | implement R.8: spec (LS#10), engine (`pools[]`, intent `pool`, top-level `verbs`, `stripe`, `delete-pool`), UI#69 (with R.9), T18/T11, spec-conformance test |
-| R.9 | [ ] | UI#69 `feat/storage-pools` CONFLICTING: upstream reworked the storage manager (UI#163 cards/tables, #157 ZFS tab, #164, #178 ZFS on dashboard) → merge main, re-run vitest + T11 |
-| R.10 | [ ] | re-pin v0.5.57 → v0.5.135 (78 releases); T9 re-audit of new host-management surface: OS upgrade planner (`osplan`/`osreadiness`, CasaOS#103–125, Ubuntu/Debian hops), Docker data move (AppManagement#40), HTTPS port change (Gateway#9, UI#162: writes `gateway.ini`), relay remote access + public app sharing (CasaOS#101, #130, #137, Gateway#10: SNI certs, share listener), fleet master backups (CasaOS#119, AppManagement#49), telemetry `os_variant` (#102), `recasaos*` unit aliases (Gateway#7 et al.), Gateway `address=` wait at boot (#8) |
-| R.11 | [ ] | recasanix-storage vs new LocalStorage `/v1` routes the UI may call: `GET /v1/disks/unreadable` (LS#31), ZFS read-only (LS#27), md create/level/filesystem (LS#12–20), SnapRAID + merge (LS#19, #21, #23) → serve or 501, T11 |
+| R.8a | [x] | implement R.8: spec (LS#10), engine (`pools[]`, intent `pool`, top-level `verbs`, `stripe`, `delete-pool`), UI#69 (with R.9), T18/T11, spec-conformance test |
+| R.9 | [x] | UI#69 `feat/storage-pools` CONFLICTING: upstream reworked the storage manager (UI#163 cards/tables, #157 ZFS tab, #164, #178 ZFS on dashboard) → merge main, re-run vitest + T11 |
+| R.10 | [x] | re-pin v0.5.57 → v0.5.135 (78 releases); T9 re-audit of new host-management surface: OS upgrade planner (`osplan`/`osreadiness`, CasaOS#103–125, Ubuntu/Debian hops), Docker data move (AppManagement#40), HTTPS port change (Gateway#9, UI#162: writes `gateway.ini`), relay remote access + public app sharing (CasaOS#101, #130, #137, Gateway#10: SNI certs, share listener), fleet master backups (CasaOS#119, AppManagement#49), telemetry `os_variant` (#102), `recasaos*` unit aliases (Gateway#7 et al.), Gateway `address=` wait at boot (#8) |
+| R.11 | [x] | recasanix-storage vs new LocalStorage `/v1` routes the UI may call: `GET /v1/disks/unreadable` (LS#31), ZFS read-only (LS#27), md create/level/filesystem (LS#12–20), SnapRAID + merge (LS#19, #21, #23) → serve or 501, T11 |
 | R.12 | [ ] | CasaOS#67 (open, inkly): guided replace/add/upgrade for SnapRAID pools = our verb set → offer the plan/apply model there once R.8 settled |
 | R.13 | [ ] | alerts branch `feat/raid-alerts-any-backend` → merge main, PR (owner: when) |
-| R.14 | [ ] | **owner input**: `CAP_MKNOD` on recasanix-storage (mdadm --create); optional `DevicePolicy=closed` + `DeviceAllow=block-*` |
+| R.14 | [x] | `CAP_MKNOD` on recasanix-storage (mdadm --create): owner OK 2026-11-12; `DevicePolicy=closed` + `DeviceAllow=block-*` not chosen |
 
 - CasaOS#138 (UI bar empty without `used`): n/a, recasanix-storage always sends `used`
+- as built (2026-11-12):
+  - R.8a: engine + UI#69 + LS#10 spec; conformance test (strict) of `/v2/storage` against the spec copy; T18 + delete-pool (btrfs, md) + striped re-create
+  - R.9: merged upstream main; ZFS tab before Pool tab (index by `hasZfs`)
+  - R.10: pins v0.5.135 (Common v0.4.33); register: `cleanup` gone upstream (root, app management), usb-mount removed upstream; new entries: Docker data move (`pr`: AppManagement `feat/image-managed`, UI `feat/docker-data-image-managed`, staging), fleet relay (tailscale, `finding`: unavailable), public app sharing (`finding`, owner decision open); OS-upgrade planner already behind `ImageManaged`
+  - test adaptations: T13 share owner stays while its account exists (upstream `chooseShareOwner`); T14 members dialog (checkbox per account); T16 tag from the pin; unit-casaos skips share-member tests needing host accounts (covered by T13)
+  - **bug found** (T13 log): `include` in `[global]` of the Nix smb.conf → keys sorted after it (`security`, `server signing`, …) fell into the fragment's last share, ignored; fix: own last section `[~casa-shares]` (`available = no`); T13 asserts the globals with shares present
+  - **bug found** (T18): mount-degraded ran `mount` inside the storage unit's namespace (`ProtectSystem=strict`) → host unmount left that copy → delete-pool `wipefs` EBUSY; fix: `systemd-run --wait -- mount …` (host); delete-pool waits for an exclusive open of each disk (≤ 30 s, error names the namespaces still mounting it)
+  - R.11: new LocalStorage GETs (snapraid, zfs, unreadable) → 404 (UI: older backend, silent); writes 501
+- open (owner): R.12 (CasaOS#67 offer), R.13 (alerts PR), PRs for `feat/image-managed` (AppManagement, UI), fleet relay / public sharing on the appliance
 
 ## Phase 6 — Deferred (explicitly out of scope for the prototype)
 

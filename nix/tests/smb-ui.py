@@ -6,6 +6,7 @@ on "Require an account", pick the new account, and press Share. The test script 
 that the share exists and is restricted to that account.
 """
 
+import re
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -66,7 +67,8 @@ with sync_playwright() as p:
         modal.get_by_placeholder("Account name").fill(account)
         modal.get_by_placeholder("Password").fill(account_password)
         modal.get_by_role("button", name="Add").click()
-        modal.get_by_text(account, exact=True).wait_for(state="visible", timeout=30000)
+        # the row: the name, then how many folders it opens (one text node with the name)
+        modal.locator(".samba-users-modal__row", has_text=re.compile(rf"^\s*{account}\b")).wait_for(state="visible", timeout=30000)
         modal.get_by_role("button", name="Close").click()
         modal.wait_for(state="hidden", timeout=15000)
 
@@ -81,7 +83,8 @@ with sync_playwright() as p:
         access = page.locator(".share-access-modal")
         access.wait_for(state="visible", timeout=15000)
         access.get_by_text("Require an account").click()
-        access.locator("select").select_option(account)
+        # members: a checkbox per account, then its access (read and write by default)
+        access.locator(".share-member", has_text=account).locator("label.checkbox").click()
         access.get_by_role("button", name="Share").click()
         access.wait_for(state="hidden", timeout=30000)
         print("shared through the UI", flush=True)

@@ -111,7 +111,8 @@ Conflicts, options:
 - **C4 backends in the image**: btrfs only (now) vs + mdadm / ZFS / LVM; each costs closure + boot code
   (mdadm assembly, ZFS import needs pool list → `zpool.cache` on state = hot data, cold mechanism)
 - **C5 destroying the pool**: cold units depend on it (docker data-root, casaos data); a) refuse while
-  apps/data exist b) stop dependents + wipe; recommend **a**
+  apps/data exist b) stop dependents + wipe; recommend **a** → **decided b** (owner, LocalStorage#10 reply
+  2026-11-12): verb `delete-pool`, erases, typed confirmation (pool name)
 
 ## 5. Where the code goes
 
@@ -121,14 +122,24 @@ Conflicts, options:
   (LocalStorage could implement it for md) vs our own namespace
 - UI: **decision U2**: upstream CasaOS-UI PRs (Storage Manager panel grows: wizard, drive roles) vs a local patch
 
-## 6. As built (I1, I2)
+## 6. As built (I1, I2, R.8a)
 
-- `/v2/storage`: `GET` (pool, drives, layouts, jobs) · `GET /layouts?disks=` · `POST /plans` · `POST /plans/{id}/apply` · `GET /jobs`
+- `/v2/storage`: `GET` (pools, box verbs, drives, layouts, jobs) · `GET /layouts?disks=` · `POST /plans` · `POST /plans/{id}/apply` · `GET /jobs`
+- contract (owner, LocalStorage#10 reply 2026-11-12):
+  - `pools[]` with `id`; intents name it (`pool`; "" = the only one); top-level `verbs` (`create-pool`)
+  - appliance: 0..1 pools — `create-pool` not offered while one exists (server-side)
+  - layout `stripe` (speed only, same `tolerates`): `none{stripe}` = btrfs raid0 (≥ 2 disks, metadata raid1),
+    `mirror{copies:2, stripe}` = btrfs raid10 (≥ 4 disks); not with parity
+  - `delete-pool`: stop docker + app management + root service, stop `DATA.mount` + pool automount/mount,
+    (md: `mdadm --stop`, `--zero-superblock`), `wipefs -a` per member, re-arm the automount, start the services
+  - spec copy `services/recasanix-storage/openapi/storage.yaml` (= LocalStorage#10); conformance test
+    `conformance_test.go`: every `/v2/storage` answer validated, strict (an unnamed field = drift)
+  - errors: `{message}` only (no `data: null`)
 - one job at a time; plan kept 10 min; apply re-plans and compares the commands (stale → 409)
 - verbs per pool / drive in the view; refusals say why (409 + message)
 - confirmation typed: disks erased (their names), less protection (pool name), mount degraded (pool name)
 - md: array `/dev/md/<label>` (`--name=<label>`), btrfs `-d single -m dup` on it; grow waits for the reshape, then `btrfs filesystem resize max`
-- mount degraded: btrfs = stop the automount unit + `mount -o degraded`; md = `mdadm --run`; until next boot
+- mount degraded: btrfs = stop the automount unit + `systemd-run --wait -- mount -o degraded` (host namespace, not the unit's); md = `mdadm --run`; until next boot
 - btrfs mounted degraded writes new data with one copy (`single`): replacing a missing / failed member waits
   for the replace, then soft-converts (`balance -dconvert=<p>,soft`); a pool with data outside its layout and
   no operation running = `degraded`, tolerates 0, `problem` text, verb `restore-layout` (`/v1/disks/raid` keeps
@@ -147,5 +158,6 @@ Conflicts, options:
 | I0 | RAID state + alerts (done: `GET /v1/disks/raid`, fork `feat/raid-alerts-any-backend`, T11, T17) | — |
 | I1 | **done** — engine (`layout.go`, `pools.go`, `plan.go`, `api_v2.go`): btrfs (none, mirror 2/3) + md (parity 1/2, btrfs on top); verbs create, add, replace, remove, change layout (btrfs), restore layout, check / stop, mount degraded, wipe; T18 | — |
 | I2 | **done (draft)** — CasaOS-UI#69 `feat/storage-pools` (Pool tab, plan dialog), in staging; contract: CasaOS-LocalStorage#10 `feat/storage-layer-api` (`api/storage/openapi.yaml`); T11 phase `layer` | owner tests → PRs out of draft |
+| R.8a | **done (draft)** — `pools[]`, `stripe`, `delete-pool`, conformance test; UI#69 (pool cards, legacy Create RAID / SnapRAID hidden where the layer answers); T18 delete + striped re-create | — |
 | I3 | volumes (subvolumes) + shares/apps integration, quotas | C1 a |
 | I4 | further backends (mdadm, ZFS) | C4 |

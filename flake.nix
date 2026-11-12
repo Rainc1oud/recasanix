@@ -39,7 +39,7 @@
       flake = false;
     };
     recasaos-app-management = {
-      url = "github:ReCasaOS/CasaOS-AppManagement";
+      url = "github:ppenguin/CasaOS-AppManagement-RCOS/recasanix-staging";
       flake = false;
     };
     recasaos-message-bus = {

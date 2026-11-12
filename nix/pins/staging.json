@@ -7,19 +7,29 @@
       "prs": [
         "feat/raid-alerts-any-backend"
       ],
-      "base": "fae7609327016c9bd50394859b5fc38d6a358119",
-      "head": "b9bc42d088975edb59d1b7d76ac73528cd0f04fe"
+      "base": "6c2cb6f76646464756ccee5bdadcc153282b8c4c",
+      "head": "58b03050e4575d7dedd2ad46bb7647b5ea9fb7ad"
+    },
+    "recasaos-app-management": {
+      "upstream": "ReCasaOS/CasaOS-AppManagement",
+      "fork": "ppenguin/CasaOS-AppManagement-RCOS",
+      "prs": [
+        "feat/image-managed"
+      ],
+      "base": "2156fd6d7e6cb96c5f8e45af93520e4853e5a460",
+      "head": "0f9c36b20d7c470d01ca8902af3bcd20db490574"
     },
     "casaos-ui": {
       "upstream": "ReCasaOS/CasaOS-UI",
       "fork": "ppenguin/CasaOS-UI-RCOS",
       "prs": [
-        "feat/storage-pools"
+        "feat/storage-pools",
+        "feat/docker-data-image-managed"
       ],
-      "base": "b5a01b5db43d0a8565e3313112156fba49f5ba92",
-      "head": "99c5a5847b2d6474b9bbcdb62173e5e62114bc03"
+      "base": "0e18872301264a193c818f55acb0ba66059fe1ec",
+      "head": "7789f806f0a147b8eadb5e20c52b5f5e4af3dac7"
     }
   },
-  "install": "0b4be6f2d8fe993e88c53863c633761a9bdaa114",
-  "common_version": "v0.4.31"
+  "install": "00ea41d5fb1309a7b2087c5342b9f974efddd91a",
+  "common_version": "v0.4.33"
 }

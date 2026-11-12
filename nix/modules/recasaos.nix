@@ -107,8 +107,8 @@ let
       seed ${sysroot}/etc/casaos/casaos.conf.sample "$config/casaos.conf"
       # VENDOR-owned keys in the hot files, enforced on every boot, the rest of each file untouched:
       # - Nix owns smb.conf → the root service manages only the shares fragment (include-only mode)
-      # - the image owns updates, packages, OS upgrade → the core offers none of them; modules are
-      #   the image's (image provider, catalogue in the store)
+      # - the image owns updates, packages, OS upgrade, Docker's data → the core and app management
+      #   offer none of them; modules are the image's (image provider, catalogue in the store)
       # - the first administrator is created on the machine (recasanix-user-admin), never over the web
       crudini --set "$config/casaos.conf" server SambaMainConfig ${
         if cfg.smb.enable then "external" else "managed"
@@ -120,6 +120,9 @@ let
       chmod 0600 "$config/casaos.conf"
       crudini --set "$config/user-service.conf" app FirstAdmin local
       chmod 0600 "$config/user-service.conf"
+      # the image owns Docker's setup (data-root on the pool, task 3.3) → no move of Docker's data
+      crudini --set "$config/app-management.conf" server ImageManaged true
+      chmod 0600 "$config/app-management.conf"
       # VENDOR-owned: anonymous statistics (PostHog, upstream default on) stay off; the core folds
       # the marker into its own state at every start (pkg/telemetry ApplyOffMarker)
       install -m 0600 /dev/null "$data/telemetry-off"
@@ -548,8 +551,14 @@ in
               "ea support" = "yes";
               "follow symlinks" = "no";
               "wide links" = "no";
-              # the runtime fragment the root service publishes (include-only mode); a missing file
-              # (before the first start) is skipped by smbd
+            };
+            # the runtime fragment the root service publishes (include-only mode); a missing file (before
+            # the first start) is skipped by smbd. NOT in [global]: its keys are written sorted, so every
+            # global key after `include` (security, server signing, …) landed in the fragment's last share
+            # and was ignored. A last, unavailable section of its own; the fragment's shares follow it.
+            settings."~casa-shares" = {
+              available = "no";
+              browseable = "no";
               include = "/etc/samba/smb.casa.conf";
             };
           };

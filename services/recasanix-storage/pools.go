@@ -10,8 +10,9 @@ import (
 // Config.PoolLabel, decision C1) and every drive with its role. Backend-neutral words; the backend
 // (btrfs, md) is named, not exposed in the verbs.
 
-// Pool is the appliance's pool.
+// Pool is a pool; the appliance has one at most (decision C1), the contract a list (LocalStorage#10).
 type Pool struct {
+	ID      string `json:"id"` // what an Intent names it by: the label
 	Name    string `json:"name"`
 	Backend string `json:"backend"` // btrfs, md
 	Layout  Layout `json:"layout"`
@@ -78,6 +79,16 @@ type StorageDrive struct {
 type storageView struct {
 	pool   *Pool // nil: no pool
 	drives []StorageDrive
+	// verbs: what can be asked of the box, outside any pool (create-pool)
+	verbs []string
+}
+
+// pools is the contract's list: none or the one.
+func (v *storageView) pools() []Pool {
+	if v.pool == nil {
+		return []Pool{}
+	}
+	return []Pool{*v.pool}
 }
 
 func (v *storageView) drive(name string) *StorageDrive {
@@ -136,7 +147,7 @@ func (inv *Inventory) view(ctx context.Context) (*storageView, error) {
 		}
 		v.drives = append(v.drives, drive)
 	}
-	v.verbs()
+	v.fillVerbs()
 	return v, nil
 }
 
@@ -165,7 +176,7 @@ func (inv *Inventory) findPool(physical []Block, arrays []RAIDArray) *Pool {
 			}
 		})
 	}
-	p := &Pool{Name: label, Progress: -1, Action: "idle", Members: []PoolMember{}, Verbs: []string{}}
+	p := &Pool{ID: label, Name: label, Progress: -1, Action: "idle", Members: []PoolMember{}, Verbs: []string{}}
 	switch {
 	case fs != nil && (strings.HasPrefix(fs.Type, "raid") || fs.Type == "md"):
 		p.Backend, p.device = "md", fs.Path
@@ -297,10 +308,15 @@ func (inv *Inventory) isPoolMember(d Block, p *Pool) bool {
 	return member
 }
 
-// verbs fills in what can be asked of the pool and of each drive now.
-func (v *storageView) verbs() {
+// fillVerbs fills in what can be asked of the box, the pool and each drive now. One pool at most: no
+// create-pool while there is one (the contract allows more; this appliance does not).
+func (v *storageView) fillVerbs() {
 	p := v.pool
 	free := len(v.free()) > 0
+	v.verbs = []string{}
+	if p == nil && free {
+		v.verbs = append(v.verbs, "create-pool")
+	}
 	for i := range v.drives {
 		d := &v.drives[i]
 		switch d.Role {
@@ -324,6 +340,11 @@ func (v *storageView) verbs() {
 	if p == nil {
 		return
 	}
+	defer func() {
+		if !p.Mounted || p.idle() {
+			p.Verbs = append(p.Verbs, "delete-pool")
+		}
+	}()
 	switch {
 	case !p.Mounted && (p.State == "inactive" || p.Missing > 0):
 		p.Verbs = append(p.Verbs, "mount-degraded")

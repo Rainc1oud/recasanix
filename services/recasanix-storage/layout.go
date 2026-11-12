@@ -8,20 +8,26 @@ import (
 // Layout is how a pool spreads data over its disks, in backend-neutral words (docs/storage-layer.md):
 //
 //	none           capacity adds up, no disk may fail          btrfs single
+//	none, stripe   the same, spread over all disks (faster)    btrfs raid0
 //	mirror copies  every block on `copies` disks               btrfs raid1 (2), raid1c3 (3)
+//	mirror, stripe 2 copies, spread over all disks (faster)    btrfs raid10
 //	parity p       p disks of parity                           md raid5 (1), raid6 (2), btrfs single on top
 //
-// Parity goes to md: btrfs's own raid5/6 is not safe for data (write hole).
+// Kind is the protection; Stripe is speed only (LocalStorage#10): it changes no Tolerates. Parity goes to
+// md: btrfs's own raid5/6 is not safe for data (write hole); parity is striped anyway.
 type Layout struct {
 	Kind   string `json:"kind"` // none, mirror, parity
 	Copies int    `json:"copies,omitempty"`
 	Parity int    `json:"parity,omitempty"`
+	Stripe bool   `json:"stripe,omitempty"`
 }
 
 // layouts is every layout a pool can be made with, simplest first.
 var layouts = []Layout{
 	{Kind: "none"},
+	{Kind: "none", Stripe: true},
 	{Kind: "mirror", Copies: 2},
+	{Kind: "mirror", Copies: 2, Stripe: true},
 	{Kind: "mirror", Copies: 3},
 	{Kind: "parity", Parity: 1},
 	{Kind: "parity", Parity: 2},
@@ -50,6 +56,12 @@ func (l Layout) Tolerates() int {
 
 // MinDisks is the fewest disks the layout can be made of.
 func (l Layout) MinDisks() int {
+	switch {
+	case l.Kind == "none" && l.Stripe:
+		return 2
+	case l.Kind == "mirror" && l.Stripe:
+		return 4 // two pairs, as md raid10 (btrfs takes fewer on new kernels; not relied on)
+	}
 	switch l.Kind {
 	case "mirror":
 		return l.Copies
@@ -62,6 +74,10 @@ func (l Layout) MinDisks() int {
 // Profile is the backend's own word for the layout.
 func (l Layout) Profile() string {
 	switch {
+	case l.Kind == "none" && l.Stripe:
+		return "raid0"
+	case l.Kind == "mirror" && l.Stripe:
+		return "raid10"
 	case l.Kind == "mirror" && l.Copies == 2:
 		return "raid1"
 	case l.Kind == "mirror":
@@ -88,20 +104,24 @@ func (l Layout) metadataProfile(n int) string {
 
 // String is the layout in a person's words.
 func (l Layout) String() string {
+	striped := ""
+	if l.Stripe {
+		striped = ", striped (faster)"
+	}
 	switch l.Kind {
 	case "mirror":
-		return fmt.Sprintf("Mirror, %d copies — survives %s failing", l.Copies, diskCount(l.Tolerates()))
+		return fmt.Sprintf("Mirror, %d copies%s — survives %s failing", l.Copies, striped, diskCount(l.Tolerates()))
 	case "parity":
 		if l.Parity == 1 {
 			return "Parity (RAID 5) — survives 1 disk failing"
 		}
 		return "Double parity (RAID 6) — survives 2 disks failing"
 	}
-	return "No protection — capacity of all disks, no disk may fail"
+	return "No protection" + striped + " — capacity of all disks, no disk may fail"
 }
 
 // layoutOfProfile is the layout a btrfs data profile or an md level stands for; false when there is
-// none (raid0, raid10, btrfs raid5/6, dup: made by hand, shown but not offered).
+// none (btrfs raid5/6, dup: made by hand, shown but not offered).
 func layoutOfProfile(profile string) (Layout, bool) {
 	for _, l := range layouts {
 		if l.Profile() == profile {
@@ -128,6 +148,10 @@ func (l Layout) Capacity(sizes []uint64) uint64 {
 		// btrfs puts each copy on a different device: the largest disk can only be matched by the others
 		c := uint64(l.Copies)
 		return min(sum/c, (sum-largest)/(c-1))
+	case "none":
+		if l.Stripe { // a stripe spans two disks at least: the largest disk's excess beyond the others stays empty
+			return min(sum, 2*(sum-largest))
+		}
 	case "parity":
 		return uint64(len(sizes)-l.Parity) * smallest // md uses the smallest member's size on each
 	}

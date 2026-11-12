@@ -13,7 +13,7 @@ buildGoModule {
   src = lib.cleanSource ../../../services/recasanix-storage;
 
   # `nix build .#recasanix-storage` with lib.fakeHash prints the real one after a dependency change.
-  vendorHash = "sha256-vx1dLbx+bJWi8jVadLH3FCK+/qWz2kZk5AmwFIfxue8=";
+  vendorHash = "sha256-p4xS41fqbQ2RLXcruHWMWBv6uTmDopqd38DiUXQ0w+s=";
 
   # No cgo: a static, self-contained binary.
   env.CGO_ENABLED = "0";

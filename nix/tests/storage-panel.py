@@ -19,6 +19,7 @@ from playwright.sync_api import sync_playwright
 
 base, user, password, phase = sys.argv[1:5]
 log = []
+console = []
 
 FILL = """([u, p]) => {
   const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); };
@@ -33,7 +34,7 @@ GEAR = (
 )
 
 failures = []
-storage_tab = drive_tab = toast_text = creating = create_form = pool_tab = plan_text = pool_default = None
+seen = storage_tab = drive_tab = toast_text = creating = create_form = pool_tab = plan_text = pool_default = None
 
 
 def check(condition, message):
@@ -46,6 +47,7 @@ try:
         browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
         page = browser.new_page(viewport={"width": 1400, "height": 1000})
         page.on("response", lambda r: log.append((r.request.method, r.status, r.url.replace(base, ""))))
+        page.on("console", lambda m: console.append(f"{m.type}: {m.text}") if m.type in ("error", "warning") else None)
 
         page.goto(base + "/")
         page.wait_for_selector("input[type=text]", timeout=30000)
@@ -56,7 +58,11 @@ try:
 
         # the dashboard, then the gear of the Storage widget
         gear = page.locator(GEAR).first
-        gear.wait_for(state="visible", timeout=60000)
+        try:
+            gear.wait_for(state="visible", timeout=60000)
+        except Exception:
+            seen = page.inner_text("body")[:1500]
+            raise
         page.wait_for_timeout(3000)
         gear.click()
 
@@ -104,6 +110,7 @@ try:
             create_form = modal.inner_text()
             print("--- create form ---\n" + create_form)
             print("buttons:", modal.locator("button").all_inner_texts())
+            print("name:", modal.locator("input").first.input_value(), "· errors:", modal.locator(".help").all_inner_texts())
             modal.get_by_role("button", name=re.compile(r"^Format and create$", re.I)).click()
             # the toast is up for three seconds: read it as soon as it shows
             toast = page.locator(".toast").first
@@ -118,6 +125,9 @@ try:
         browser.close()
 except Exception:
     print('STEP FAILED; what was seen so far:')
+    print('console:', console[-20:])
+    print('failed requests:', [e for e in log if e[1] >= 400][-20:])
+    print('--- page ---\n' + str(seen))
     print('panel requests:', [e for e in log if any(x in e[2] for x in ('/v1/disks', '/v1/storage', '/v2/local_storage', '/v2/storage'))])
     print('--- Storage tab ---\n' + str(storage_tab))
     print('--- Drive tab ---\n' + str(drive_tab))
@@ -130,7 +140,8 @@ print("--- Drive tab ---\n" + drive_tab)
 
 # the requests the panel makes are answered
 for needle in ("/v1/disks", "/v1/storage", "/v2/local_storage/merge", "/v1/disks/raid", "/v2/storage"):
-    calls = [e for e in panel_calls if needle in e[2] and e[0] == "GET"]
+    # the path itself (not /v1/disks/zfs, /v1/disks/snapraid: 404 = a backend without them, by design)
+    calls = [e for e in panel_calls if e[2].split("?")[0] == needle and e[0] == "GET"]
     check(calls, f"the panel never asked for {needle}")
     check(all(e[1] == 200 for e in calls), f"{needle} was answered {[e[1] for e in calls]}")
 

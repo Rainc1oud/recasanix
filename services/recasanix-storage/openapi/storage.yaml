@@ -1,0 +1,354 @@
+openapi: 3.0.3
+
+info:
+  title: CasaOS storage layer API (proposal)
+  version: v2
+  description: |-
+    A backend-neutral storage layer: pools over the drives, made, grown, repaired and checked
+    from the dashboard. The words are the person's (layout, protection, disk), not the backend's
+    (btrfs profile, md level): the service picks the backend per layout and says which it used.
+
+    **A contract, not one service's API**: several backends implement it; a client targets only this.
+
+    - **Pools**: a list; each has an `id`, which every intent but `create-pool` and `wipe-disk` names.
+      How many a box may hold is the backend's policy, shown by its verbs (`create-pool` offered or not).
+    - **Layouts**: `kind` is the protection: `none` (capacity adds up), `mirror` with `copies`, `parity`
+      with `parity` disks. `stripe` is speed only (data spread over all disks), it changes no `tolerates`:
+      `mirror{copies:2, stripe}` = RAID 10, `none{stripe}` = RAID 0. A backend lists what it offers in
+      `GET /layouts`.
+    - **Plan → preview → apply**: an intent gives a plan (steps, exact commands, effects, disks erased,
+      text to type); applying makes the plan again from a fresh look and runs it only when nothing
+      changed; it then runs as a job. Nothing from a request reaches a command line other than a disk
+      the fresh listing offers for that action.
+    - **Verbs**: each pool and drive lists what can be asked of it now; a client shows only those.
+
+    Implementations: LocalStorage (reference; md), ReCasaNix's recasanix-storage (one pool at most;
+    btrfs, parity layouts on md with btrfs on top).
+    CasaOS-UI's Storage manager shows its Pool tab when `GET /v2/storage` answers.
+
+servers:
+  - url: /v2/storage
+
+security:
+  - access_token: []
+
+paths:
+  /:
+    get:
+      summary: The pools, the drives, the layouts on the free drives, recent jobs
+      operationId: getStorage
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Overview" }
+
+  /layouts:
+    get:
+      summary: What each layout gives on these free drives
+      operationId: getLayouts
+      parameters:
+        - name: disks
+          in: query
+          description: drive names, comma-separated; unknown or non-free names are ignored
+          schema: { type: string, example: "sdb,sdc" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/LayoutOption" }
+
+  /plans:
+    post:
+      summary: Plan an action (preview); nothing changes
+      operationId: plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Intent" }
+      responses:
+        "200":
+          description: The plan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Plan" }
+        "400": { $ref: "#/components/responses/Message" }
+        "409":
+          description: Refused; `message` says why, for the person
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+
+  /plans/{id}/apply:
+    post:
+      summary: Apply a plan made before
+      operationId: apply
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm:
+                  type: string
+                  description: the plan's `confirm`, typed by the person; empty when it asks none
+      responses:
+        "202":
+          description: Started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Job" }
+        "400":
+          description: The confirmation does not match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "404":
+          description: No such plan (expired after 10 minutes, or applied)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "409":
+          description: The storage changed since the plan was made, or another job runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+
+  /jobs:
+    get:
+      summary: Recent jobs, newest last
+      operationId: getJobs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Job" }
+
+components:
+  securitySchemes:
+    access_token:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: the user's access token, bare or `Bearer <token>`
+
+  responses:
+    Message:
+      description: Message
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Message" }
+
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: { type: string }
+
+    Verb:
+      type: string
+      enum: [create-pool, delete-pool, add-disk, replace-disk, remove-disk, change-layout, restore-layout, check, cancel-check, mount-degraded, wipe-disk]
+      description: |-
+        delete-pool: the pool taken apart, its disks blank (erases; typed confirmation) ·
+        restore-layout: data not in the pool's layout (written while a disk was missing) put back into it
+
+    Layout:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [none, mirror, parity], description: "the protection" }
+        copies: { type: integer, description: "mirror: 2 or 3" }
+        parity: { type: integer, description: "parity: 1 (RAID 5) or 2 (RAID 6)" }
+        stripe: { type: boolean, description: "speed only: none → RAID 0, mirror{copies:2} → RAID 10; not with parity" }
+
+    LayoutOption:
+      type: object
+      properties:
+        layout: { $ref: "#/components/schemas/Layout" }
+        backend: { type: string, example: btrfs }
+        profile: { type: string, description: "the backend's word", example: raid1 }
+        description: { type: string }
+        capacity: { type: integer, format: int64, description: "bytes for data on the chosen drives, about" }
+        tolerates: { type: integer, description: "disks it survives failing" }
+        min_disks: { type: integer }
+        possible: { type: boolean }
+        reason: { type: string, description: "why not possible" }
+
+    Overview:
+      type: object
+      properties:
+        pools:
+          type: array
+          items: { $ref: "#/components/schemas/Pool" }
+        verbs:
+          type: array
+          items: { $ref: "#/components/schemas/Verb" }
+          description: what can be asked of the box outside any pool (create-pool)
+        drives:
+          type: array
+          items: { $ref: "#/components/schemas/Drive" }
+        layouts:
+          type: array
+          items: { $ref: "#/components/schemas/LayoutOption" }
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        busy: { type: boolean, description: "a job runs" }
+
+    Pool:
+      type: object
+      properties:
+        id: { type: string, description: "what an intent names the pool by" }
+        name: { type: string }
+        backend: { type: string, enum: [btrfs, md] }
+        layout: { $ref: "#/components/schemas/Layout" }
+        layout_known: { type: boolean, description: "false: a profile not offered (made by hand), or not readable (not mounted)" }
+        profile: { type: string }
+        description: { type: string }
+        state:
+          type: string
+          enum: [ok, degraded, rebuilding, checking, resyncing, reshaping, inactive]
+          description: as GET /v1/disks/raid
+        mounted: { type: boolean }
+        tolerates: { type: integer, description: "disks it survives failing now" }
+        disks: { type: integer }
+        missing: { type: integer }
+        size: { type: integer, format: int64 }
+        used: { type: integer, format: int64 }
+        avail: { type: integer, format: int64 }
+        action: { type: string, enum: [idle, recover, check, reshape, resync, repair] }
+        progress: { type: number, description: "percent; -1 unknown" }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/PoolMember" }
+        verbs:
+          type: array
+          items: { $ref: "#/components/schemas/Verb" }
+        problem: { type: string, description: "what is wrong beyond the state, for the person" }
+
+    PoolMember:
+      type: object
+      properties:
+        name: { type: string, description: "device name; `devid N` for a btrfs member without a device" }
+        disk: { type: string, description: "the drive it is on; empty when gone" }
+        state: { type: string, enum: [active, rebuilding, spare, faulty] }
+        size: { type: integer, format: int64 }
+        errors: { type: integer, format: int64, description: "the device's error counters, summed" }
+
+    Drive:
+      type: object
+      properties:
+        name: { type: string }
+        path: { type: string }
+        model: { type: string }
+        serial: { type: string }
+        type: { type: string, enum: [HDD, SSD, NVMe, USB, MMC] }
+        size: { type: integer, format: int64 }
+        smart_status: { type: string, enum: [passed, failed, unavailable] }
+        temperature: { type: integer }
+        role:
+          type: string
+          enum: [system, member, free, small, foreign, busy]
+          description: |-
+            system: carries the OS · member: of the pool · free: blank, usable · small: blank, under the
+            minimum size · foreign: holds something else, not in use (can be wiped) · busy: in use elsewhere
+        pool: { type: string, description: "member: the pool's id" }
+        content: { type: string, description: "what is on it: btrfs, ext4, linux_raid_member, partitions…" }
+        verbs:
+          type: array
+          items: { $ref: "#/components/schemas/Verb" }
+
+    Intent:
+      type: object
+      required: [verb]
+      properties:
+        verb: { $ref: "#/components/schemas/Verb" }
+        pool: { type: string, description: "the pool's id; every verb but create-pool and wipe-disk ('' = the only pool)" }
+        layout: { $ref: "#/components/schemas/Layout" }
+        disks:
+          type: array
+          items: { type: string }
+          description: drive names (free drives; wipe-disk a foreign one)
+        member: { type: string, description: "a pool member's name (replace-disk, remove-disk)" }
+
+    Effects:
+      type: object
+      properties:
+        capacity_before: { type: integer, format: int64 }
+        capacity_after: { type: integer, format: int64 }
+        tolerates_before: { type: integer }
+        tolerates_after: { type: integer }
+        erases:
+          type: array
+          items: { type: string }
+          description: drives whose content is destroyed
+        background: { type: boolean, description: "the work goes on after the steps (rebuild, conversion, check)" }
+        notes:
+          type: array
+          items: { type: string }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: string }
+        intent: { $ref: "#/components/schemas/Intent" }
+        summary: { type: string }
+        steps:
+          type: array
+          items: { type: string }
+        commands:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+          description: the exact argument vectors, for an advanced view
+        effects: { $ref: "#/components/schemas/Effects" }
+        confirm: { type: string, description: "to be typed to apply; empty: none" }
+        expires: { type: string, format: date-time }
+
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        verb: { $ref: "#/components/schemas/Verb" }
+        summary: { type: string }
+        state: { type: string, enum: [running, done, failed] }
+        step: { type: integer, description: "steps finished" }
+        steps: { type: integer }
+        error: { type: string }
+        started: { type: string, format: date-time }
+        ended: { type: string, format: date-time }

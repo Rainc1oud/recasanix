@@ -34,7 +34,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-ZaDwrLYk8rZtizKESAWjS1jp7oIjrhp2XE1Y5CuIu8w=";
+    hash = "sha256-uMG80ti8+Jygp28Qu3bukPz7NLiGoN3LY+H7EHItwW8=";
   };
 
   # Upstream's `pnpm build`, with the destination directed at $out. `.env.production` (NODE_ENV=prod)

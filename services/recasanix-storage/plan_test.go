@@ -54,6 +54,7 @@ func newRig(t *testing.T, lsblk []byte) *rig {
 	k := mirror()
 	inv.sys, inv.btrfs = sys.root, k
 	pl := newPlanner(inv, run, inv.cfg, discardLog())
+	pl.released = func(context.Context, string) error { return nil }
 	return &rig{t: t, inv: inv, run: run, sys: sys, k: k, pl: pl}
 }
 
@@ -260,7 +261,7 @@ func TestMirrorPoolView(t *testing.T) {
 		!p.Mounted || p.Tolerates != 1 || p.Disks != 2 || p.Size != 8*gib {
 		t.Fatalf("pool %+v", p)
 	}
-	if want := []string{"add-disk", "replace-disk", "change-layout", "check"}; !reflect.DeepEqual(p.Verbs, want) {
+	if want := []string{"add-disk", "replace-disk", "change-layout", "check", "delete-pool"}; !reflect.DeepEqual(p.Verbs, want) {
 		t.Fatalf("pool verbs %v, want %v (a 2-disk mirror cannot lose a disk)", p.Verbs, want)
 	}
 	if got := roles(v); got["sda"] != "member" || got["sdb"] != "member" || got["sdc"] != "free" {
@@ -338,13 +339,13 @@ func TestUnmountedMirrorMissingADisk(t *testing.T) {
 	r.sys.block("sdb", "sdc")
 	r.k.devices = map[string]uint64{"/dev/sdb": 2}
 	v := r.view()
-	if v.pool == nil || v.pool.State != "inactive" || v.pool.Mounted || !reflect.DeepEqual(v.pool.Verbs, []string{"mount-degraded"}) {
+	if v.pool == nil || v.pool.State != "inactive" || v.pool.Mounted || !reflect.DeepEqual(v.pool.Verbs, []string{"mount-degraded", "delete-pool"}) {
 		t.Fatalf("pool %+v", v.pool)
 	}
 	p := r.plan(Intent{Verb: "mount-degraded"})
 	want := append([][]string{
 		{"systemctl", "stop", "--", `var-lib-recasanix-data.automount`},
-		{"mount", "-t", "btrfs", "-o", "degraded,noatime,compress=zstd", "--", "/dev/sdb", "/var/lib/recasanix/data"},
+		{"systemd-run", "--wait", "--collect", "--quiet", "--", hostBin("mount"), "-t", "btrfs", "-o", "degraded,noatime,compress=zstd", "--", "/dev/sdb", "/var/lib/recasanix/data"},
 	}, online[1:]...)
 	if !reflect.DeepEqual(p.Commands, want) || p.Confirm != "recasanix-data" {
 		t.Fatalf("mount degraded\n%q\nwant\n%q", p.Commands, want)
@@ -399,7 +400,7 @@ func TestParityPool(t *testing.T) {
 	if got := roles(v); got["vdb"] != "member" || got["vde"] != "free" {
 		t.Fatalf("roles %v", got)
 	}
-	if want := []string{"add-disk", "replace-disk", "check"}; !reflect.DeepEqual(p.Verbs, want) {
+	if want := []string{"add-disk", "replace-disk", "check", "delete-pool"}; !reflect.DeepEqual(p.Verbs, want) {
 		t.Fatalf("verbs %v, want %v", p.Verbs, want)
 	}
 	add := r.plan(Intent{Verb: "add-disk", Disks: []string{"vde"}})
@@ -505,16 +506,20 @@ func TestStorageRoutes(t *testing.T) {
 	w := send("GET", "/v2/storage", "")
 	m := decode(t, w)
 	data := m["data"].(map[string]any)
-	if w.Code != 200 || data["pool"] != nil || len(data["drives"].([]any)) != 3 || len(data["layouts"].([]any)) != len(layouts) {
+	if w.Code != 200 || len(data["pools"].([]any)) != 0 || !reflect.DeepEqual(data["verbs"], []any{"create-pool"}) ||
+		len(data["drives"].([]any)) != 3 || len(data["layouts"].([]any)) != len(layouts) {
 		t.Fatalf("%d %v", w.Code, m)
 	}
 	w = send("GET", "/v2/storage/layouts?disks=vdb,vdc,vda,vdb", "")
 	opts := decode(t, w)["data"].([]any)
-	mirror := opts[1].(map[string]any)
+	mirror := opts[2].(map[string]any)
 	if mirror["possible"] != true || mirror["capacity"].(float64) != 8*gib {
 		t.Fatalf("layouts %v", opts)
 	}
-	if parity := opts[3].(map[string]any); parity["possible"] != false || parity["reason"] != "needs at least 3 disks" {
+	if striped := opts[1].(map[string]any); striped["possible"] != true || striped["profile"] != "raid0" || striped["capacity"].(float64) != 16*gib {
+		t.Fatalf("striped %v", striped)
+	}
+	if parity := opts[5].(map[string]any); parity["possible"] != false || parity["reason"] != "needs at least 3 disks" {
 		t.Fatalf("parity %v", parity)
 	}
 	w = send("POST", "/v2/storage/plans", `{"verb":"create-pool","layout":{"kind":"mirror","copies":2},"disks":["vdb","vda"]}`)
@@ -576,7 +581,7 @@ func TestParityPoolNotStarted(t *testing.T) {
 	r.sys.block("vdd", "vde", "vdb")
 	v := r.view()
 	p := v.pool
-	if p == nil || p.Backend != "md" || p.State != "inactive" || p.Mounted || !reflect.DeepEqual(p.Verbs, []string{"mount-degraded"}) {
+	if p == nil || p.Backend != "md" || p.State != "inactive" || p.Mounted || !reflect.DeepEqual(p.Verbs, []string{"mount-degraded", "delete-pool"}) {
 		t.Fatalf("pool %+v", p)
 	}
 	if got := roles(v); got["vdd"] != "member" || got["vdb"] != "free" {
@@ -585,5 +590,61 @@ func TestParityPoolNotStarted(t *testing.T) {
 	plan := r.plan(Intent{Verb: "mount-degraded"})
 	if plan.Commands[0][0] != "mdadm" || !reflect.DeepEqual(plan.Commands[0], []string{"mdadm", "--run", "/dev/md127"}) {
 		t.Fatalf("mount degraded %q", plan.Commands)
+	}
+}
+
+// stripe is speed, not protection (LocalStorage#10): btrfs raid10 / raid0, the same Tolerates
+func TestStripedLayouts(t *testing.T) {
+	r := newRig(t, machine(blank("vdb", 8), blank("vdc", 8), blank("vdd", 8), blank("vde", 8)))
+	all := []string{"vdb", "vdc", "vdd", "vde"}
+	p := r.plan(Intent{Verb: "create-pool", Layout: &Layout{Kind: "mirror", Copies: 2, Stripe: true}, Disks: all})
+	if want := []string{"mkfs.btrfs", "-f", "-L", "recasanix-data", "-d", "raid10", "-m", "raid10", "--", "/dev/vdb", "/dev/vdc", "/dev/vdd", "/dev/vde"}; !reflect.DeepEqual(p.Commands[0], want) ||
+		p.Effects.ToleratesAfter != 1 || p.Effects.CapacityAfter != 16*gib {
+		t.Fatalf("%q %+v", p.Commands[0], p.Effects)
+	}
+	r.refused(Intent{Verb: "create-pool", Layout: &Layout{Kind: "mirror", Copies: 2, Stripe: true}, Disks: all[:3]}, "needs at least 4 disks")
+	r.refused(Intent{Verb: "create-pool", Layout: &Layout{Kind: "parity", Parity: 1, Stripe: true}, Disks: all}, "choose a layout")
+	p = r.plan(Intent{Verb: "create-pool", Layout: &Layout{Kind: "none", Stripe: true}, Disks: all[:2]})
+	if p.Commands[0][5] != "raid0" || p.Commands[0][7] != "raid1" || p.Effects.CapacityAfter != 16*gib || p.Effects.ToleratesAfter != 0 {
+		t.Fatalf("%q %+v", p.Commands[0], p.Effects)
+	}
+	for profile, want := range map[string]Layout{"raid0": {Kind: "none", Stripe: true}, "raid10": {Kind: "mirror", Copies: 2, Stripe: true}} {
+		if l, ok := layoutOfProfile(profile); !ok || l != want {
+			t.Errorf("%s → %+v %v", profile, l, ok)
+		}
+	}
+	if c := (Layout{Kind: "none", Stripe: true}).Capacity([]uint64{8 * gib, 2 * gib}); c != 4*gib {
+		t.Errorf("raid0 on 8+2 GiB: %d", c)
+	}
+}
+
+func TestDeletePool(t *testing.T) {
+	r := mirrorRig(t)
+	r.refused(Intent{Verb: "delete-pool", Pool: "other"}, `no pool "other"`)
+	p := r.plan(Intent{Verb: "delete-pool", Pool: "recasanix-data"})
+	mount := `var-lib-recasanix-data`
+	want := [][]string{
+		{"systemctl", "stop", "--", "docker.service", "docker.socket", "casaos-app-management.service", "casaos.service"},
+		{"systemctl", "stop", "--", "DATA.mount", mount + ".automount", mount + ".mount"},
+		{"btrfs", "device", "scan", "--forget"},
+		{"udevadm", "settle", "--timeout=30"},
+		{"wipefs", "-a", "--", "/dev/sdb"}, // devid order
+		{"wipefs", "-a", "--", "/dev/sda"},
+		{"udevadm", "settle", "--timeout=30"},
+		{"systemctl", "start", "--", mount + ".automount"},
+		{"systemctl", "start", "--", "casaos.service", "casaos-app-management.service"},
+	}
+	if !reflect.DeepEqual(p.Commands, want) || p.Confirm != "recasanix-data" || !reflect.DeepEqual(p.Effects.Erases, []string{"sdb", "sda"}) || p.Effects.CapacityAfter != 0 {
+		t.Fatalf("commands\n%q\nwant\n%q\n%+v", p.Commands, want, p.Effects)
+	}
+	// "" = the only pool
+	if q := r.plan(Intent{Verb: "delete-pool"}); !reflect.DeepEqual(q.Commands, want) {
+		t.Fatalf("no pool named: %q", q.Commands)
+	}
+
+	md := mdRig(t, false).plan(Intent{Verb: "delete-pool"})
+	if md.Commands[2][0] != "mdadm" || md.Commands[2][1] != "--stop" || md.Commands[4][1] != "--zero-superblock" || md.Commands[4][2] != "/dev/vdb" ||
+		!reflect.DeepEqual(md.Effects.Erases, []string{"vdb", "vdc", "vdd"}) {
+		t.Fatalf("md %q %+v", md.Commands, md.Effects)
 	}
 }

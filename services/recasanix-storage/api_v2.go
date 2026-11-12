@@ -10,7 +10,7 @@ import (
 
 // The storage layer's API (docs/storage-layer.md): backend-neutral, the v2 envelope ({message, data}).
 //
-//	GET  /v2/storage                       pool (or null), drives with roles and verbs, layouts, jobs
+//	GET  /v2/storage                       pools (0..1 here), box verbs, drives with roles and verbs, layouts, jobs
 //	GET  /v2/storage/layouts?disks=a,b     what each layout gives on those free disks
 //	POST /v2/storage/plans                 Intent → Plan (preview), or 409 with the reason
 //	POST /v2/storage/plans/{id}/apply      {confirm} → Job (202); 409 stale / busy, 400 confirmation
@@ -52,7 +52,7 @@ func (a *API) storageOverview(w http.ResponseWriter, r *http.Request) {
 		drives = []StorageDrive{}
 	}
 	writeJSON(w, http.StatusOK, v2Envelope{Message: "ok", Data: map[string]any{
-		"pool": v.pool, "drives": drives, "layouts": layoutOptions(v.free()), "jobs": a.planner.Jobs(), "busy": a.planner.Busy(),
+		"pools": v.pools(), "verbs": v.verbs, "drives": drives, "layouts": layoutOptions(v.free()), "jobs": a.planner.Jobs(), "busy": a.planner.Busy(),
 	}})
 }
 

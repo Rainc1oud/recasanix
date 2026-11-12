@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -27,7 +30,9 @@ import (
 
 // Intent is what a person asks for.
 type Intent struct {
-	Verb   string   `json:"verb"`
+	Verb string `json:"verb"`
+	// Pool: the pool's id; every verb but create-pool and wipe-disk acts on one ("" = the only one)
+	Pool   string   `json:"pool,omitempty"`
 	Layout *Layout  `json:"layout,omitempty"`
 	Disks  []string `json:"disks,omitempty"`  // drive names (vdb)
 	Member string   `json:"member,omitempty"` // a pool member's name (vdc, "devid 2")
@@ -103,6 +108,8 @@ type Planner struct {
 	online *Creator
 	log    *slog.Logger
 	now    func() time.Time
+	// released waits until nothing holds the device open exclusively (tests: no-op)
+	released func(ctx context.Context, dev string) error
 
 	mu    sync.Mutex
 	plans map[string]*Plan
@@ -111,7 +118,7 @@ type Planner struct {
 }
 
 func newPlanner(inv *Inventory, run Runner, cfg Config, log *slog.Logger) *Planner {
-	return &Planner{inv: inv, run: run, online: newCreator(run, cfg), log: log, now: time.Now, plans: map[string]*Plan{}}
+	return &Planner{inv: inv, run: run, online: newCreator(run, cfg), log: log, now: time.Now, released: waitReleased, plans: map[string]*Plan{}}
 }
 
 // Plan makes a plan and keeps it for apply.
@@ -264,12 +271,21 @@ func (pl *Planner) Busy() bool {
 // make is the plan for an intent on view v, or a refusal saying why there is none.
 func (pl *Planner) make(v *storageView, in Intent) (*Plan, error) {
 	pool := v.pool
-	if in.Verb != "create-pool" && in.Verb != "wipe-disk" && pool == nil {
-		return nil, refuse("there is no pool yet")
+	if in.Verb != "create-pool" && in.Verb != "wipe-disk" {
+		if pool == nil {
+			return nil, refuse("there is no pool yet")
+		}
+		if in.Pool != "" && in.Pool != pool.ID {
+			return nil, refuse("there is no pool %q", in.Pool)
+		}
 	}
 	if pool != nil {
 		switch in.Verb {
 		case "create-pool", "wipe-disk":
+		case "delete-pool":
+			if pool.Mounted && !pool.idle() {
+				return nil, refuse("the pool is busy (%s): wait until that is done", pool.State)
+			}
 		case "mount-degraded":
 			if pool.Mounted {
 				return nil, refuse("the pool is mounted")
@@ -314,6 +330,8 @@ func (pl *Planner) make(v *storageView, in Intent) (*Plan, error) {
 		return pl.mountDegraded(v)
 	case "wipe-disk":
 		return pl.wipeDisk(v, in)
+	case "delete-pool":
+		return pl.deletePool(v)
 	}
 	return nil, refuse("unknown action %q", in.Verb)
 }
@@ -695,6 +713,11 @@ func (pl *Planner) btrfsIdle(pool *Pool) func(ctx context.Context) error {
 
 // automountUnit is the systemd automount unit of a mount point (systemd-escape --path).
 func automountUnit(mountPoint string) string {
+	return unitPath(mountPoint) + ".automount"
+}
+
+// unitPath is a mount point as systemd names its units (systemd-escape --path), without the suffix.
+func unitPath(mountPoint string) string {
 	trimmed := strings.Trim(mountPoint, "/")
 	var b strings.Builder
 	for i := 0; i < len(trimmed); i++ {
@@ -708,7 +731,7 @@ func automountUnit(mountPoint string) string {
 			fmt.Fprintf(&b, `\x%02x`, c)
 		}
 	}
-	return b.String() + ".automount"
+	return b.String()
 }
 
 func (pl *Planner) mountDegraded(v *storageView) (*Plan, error) {
@@ -737,8 +760,71 @@ func (pl *Planner) mountDegraded(v *storageView) (*Plan, error) {
 	p.Summary = "Mount the pool with a disk missing"
 	p.steps = append([]step{
 		{text: "Stop mounting the pool on demand", argv: []string{"systemctl", "stop", "--", automountUnit(cfg.PoolMountPoint)}},
-		{text: "Mount it with the disk missing", argv: []string{"mount", "-t", "btrfs", "-o", "degraded,noatime,compress=zstd", "--", member, cfg.PoolMountPoint}},
+		// on the host, through systemd: a mount from this unit's own namespace (ProtectSystem) outlives the host's unmount
+		{text: "Mount it with the disk missing", argv: []string{"systemd-run", "--wait", "--collect", "--quiet", "--", hostBin("mount"), "-t", "btrfs", "-o", "degraded,noatime,compress=zstd", "--", member, cfg.PoolMountPoint}},
 	}, pl.onlineSteps()[1:]...)
+	return p, nil
+}
+
+// deletePool takes the pool apart: everything on it is lost, its disks come back blank. The services that
+// use it stop first and start again on the empty /DATA; the pool's automount is armed again for a new one.
+func (pl *Planner) deletePool(v *storageView) (*Plan, error) {
+	cfg := pl.inv.cfg
+	pool := v.pool
+	var disks []string
+	for _, m := range pool.Members {
+		if m.Disk != "" {
+			disks = append(disks, m.Disk)
+		}
+	}
+	p := &Plan{
+		Summary: "Delete the pool " + pool.Name,
+		Confirm: pool.Name,
+		Effects: Effects{CapacityBefore: pool.Size, ToleratesBefore: pool.Tolerates, Erases: disks,
+			Notes: []string{"Everything in the pool is lost: the apps' data, the shares, Docker's images. Its disks come back blank."}},
+	}
+	mount := unitPath(cfg.PoolMountPoint)
+	p.steps = []step{
+		{text: "Stop Docker and the services that use /DATA", argv: []string{"systemctl", "stop", "--", "docker.service", "docker.socket", "casaos-app-management.service", "casaos.service"}},
+		{text: "Unmount /DATA and the pool", argv: []string{"systemctl", "stop", "--", "DATA.mount", mount + ".automount", mount + ".mount"}},
+	}
+	if pool.Backend == "md" {
+		p.steps = append(p.steps, step{text: "Stop the array", argv: []string{"mdadm", "--stop", pool.device}})
+	} else {
+		// the kernel keeps the disks registered after the unmount; forget them, so nothing holds them
+		p.steps = append(p.steps, step{text: "Let go of the pool's disks", argv: []string{"btrfs", "device", "scan", "--forget"}})
+	}
+	// udev probes the released disks (close → change event, maybe not queued yet at settle): erasing meanwhile finds them busy
+	var devs []string
+	for _, m := range pool.Members {
+		if m.Disk != "" {
+			devs = append(devs, "/dev/"+m.Name)
+		}
+	}
+	p.steps = append(p.steps, step{text: "Wait until the system has looked at the released disks", argv: []string{"udevadm", "settle", "--timeout=30"},
+		wait: func(ctx context.Context) error {
+			for _, d := range devs {
+				if err := pl.released(ctx, d); err != nil {
+					return err
+				}
+			}
+			return nil
+		}})
+	for _, m := range pool.Members {
+		if m.Disk == "" {
+			continue // gone: nothing to erase
+		}
+		dev := "/dev/" + m.Name // a kernel name from the listing, not from the request
+		if pool.Backend == "md" {
+			p.steps = append(p.steps, step{text: "Clear the RAID mark on " + m.Name, argv: []string{"mdadm", "--zero-superblock", dev}})
+		}
+		p.steps = append(p.steps, step{text: "Erase the signatures on " + m.Name, argv: []string{"wipefs", "-a", "--", dev}})
+	}
+	p.steps = append(p.steps,
+		step{text: "Let the system see the blank disks", argv: []string{"udevadm", "settle", "--timeout=30"}},
+		step{text: "Wait for a new pool on demand again", argv: []string{"systemctl", "start", "--", mount + ".automount"}},
+		step{text: "Start the services again on the empty /DATA", argv: []string{"systemctl", "start", "--", "casaos.service", "casaos-app-management.service"}},
+	)
 	return p, nil
 }
 
@@ -774,6 +860,60 @@ func (pl *Planner) wipeDisk(v *storageView, in Intent) (*Plan, error) {
 }
 
 // mdIdle waits until the md array's sync_action is idle again (a reshape done).
+// hostBin resolves a command on this unit's PATH: a transient unit's PATH need not have it.
+func hostBin(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+	return name
+}
+
+// waitReleased polls an exclusive open of dev (what wipefs needs) for up to 30 s; other errors are wipefs's to report.
+func waitReleased(ctx context.Context, dev string) error {
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		f, err := os.OpenFile(dev, os.O_RDONLY|syscall.O_EXCL, 0)
+		if err == nil {
+			return f.Close()
+		}
+		if !errors.Is(err, syscall.EBUSY) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if h := mountHolders(dev); len(h) > 0 {
+				return fmt.Errorf("%s is still in use (mounted by %s)", dev, strings.Join(h, ", "))
+			}
+			return fmt.Errorf("%s is still in use", dev)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+// mountHolders names the processes whose mount namespace still mounts dev (a service's private namespace keeps a pool alive).
+func mountHolders(dev string) []string {
+	var out []string
+	seen := map[string]bool{}
+	files, _ := filepath.Glob("/proc/[0-9]*/mountinfo")
+	for _, f := range files {
+		ns, _ := os.Readlink(filepath.Join(filepath.Dir(f), "ns", "mnt"))
+		if seen[ns] {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil || !strings.Contains(string(b), " "+dev+" ") {
+			continue
+		}
+		seen[ns] = true
+		comm, _ := os.ReadFile(filepath.Join(filepath.Dir(f), "comm"))
+		out = append(out, strings.TrimSpace(string(comm))+"["+filepath.Base(filepath.Dir(f))+"]")
+	}
+	return out
+}
+
 func (pl *Planner) mdIdle(device string) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		name := filepath.Base(device)

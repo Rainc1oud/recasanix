@@ -28,6 +28,7 @@ let
     {
       name, # cleanup/setup/migration directory name, e.g. "gateway"
       buildroot ? false,
+      cleanup ? true, # upstream dropped the per-service uninstall hooks of some (root, app management: v0.5.135)
     }:
     [
       {
@@ -44,14 +45,14 @@ let
         replacedBy = "Image rebuilds replace the system closure; state layout is task 3.2.";
         caller = "n/a — only run by the upstream installer, which is not packaged";
       }
-      {
-        path = "${common}/cleanup";
-        kind = "path";
-        why = "Uninstall hooks (debian/arch cleanup-${name}.sh) that stop/disable units and remove files from a mutable host.";
-        replacedBy = "Nothing: the appliance is not uninstalled piecemeal; an image replaces the closure.";
-        caller = "n/a — only run by the upstream installer, which is not packaged";
-      }
     ]
+    ++ lib.optional cleanup {
+      path = "${common}/cleanup";
+      kind = "path";
+      why = "Uninstall hooks (debian/arch cleanup-${name}.sh) that stop/disable units and remove files from a mutable host.";
+      replacedBy = "Nothing: the appliance is not uninstalled piecemeal; an image replaces the closure.";
+      caller = "n/a — only run by the upstream installer, which is not packaged";
+    }
     ++ lib.optional buildroot {
       path = "build/sysroot/usr/lib/systemd/system/casaos-${name}.service.buildroot";
       kind = "path";
@@ -95,6 +96,7 @@ rec {
       perService {
         name = "app-management";
         buildroot = true;
+        cleanup = false;
       }
       ++ [
         {
@@ -105,6 +107,13 @@ rec {
           caller = "yes — route registration is commented out upstream (route/v1.go). Re-check on every bump.";
         }
         {
+          path = "route/v1.go: /v1/container/docker-location (move Docker's data)";
+          kind = "pr";
+          why = "Stops Docker, copies its data, writes systemd bind-mount units (var-lib-docker.mount, var-lib-containerd.mount) and RequiresMountsFor drop-ins into /etc/systemd/system, starts Docker: host setup from an API call (v0.5.10x, AppManagement#40).";
+          replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): routes 404, no recovery at start. Docker's data-root is cold-layer Nix (task 3.3: on the data pool). Branch `feat/image-managed` (AppManagement), in staging; PR pending.";
+          caller = "yes — Settings 'Docker data' row hidden on `image_managed` (UI branch `feat/docker-data-image-managed`, in staging; PR pending)";
+        }
+        {
           path = "route/v2.go: git-deployed apps (/v2/app_management/git/*, webhook)";
           kind = "finding";
           why = "Apps built from a git repository on the box: host `git` and `docker build`, plus a webhook route that skips the JWT (HMAC-signed by the app's secret).";
@@ -112,113 +121,132 @@ rec {
           caller = "yes — the dashboard's only entry ('From a git repository…' in the app menu) is removed: casaos-ui patches/0001-hide-git-apps.patch. Routes stay (no app exists to reach them)";
         }
       ];
-    casaos = perService { name = "casaos"; } ++ [
-      {
-        path = "${common}/shell/update.sh";
-        kind = "path";
-        why = "Upstream self-update entry point (curl the installer, run it as root).";
-        replacedBy = "Image/OTA pipeline (RAUC, later phase).";
-        caller = "yes — no Go code runs it; the update routes are absent in image-managed mode (below)";
+    casaos =
+      perService {
+        name = "casaos";
+        cleanup = false;
       }
-      {
-        path = "${common}/shell/smb-discovery.sh";
-        kind = "path";
-        why = "Installs and configures discovery on a Debian host (wsdd, avahi service files, smb.conf edits).";
-        replacedBy = "services.samba-wsdd + avahi + Samba with mDNS, declared in the NixOS module.";
-        caller = "n/a — run by the upstream installer only";
-      }
-      {
-        path = "build/sysroot/etc/casaos/smb-discovery.conf.sample";
-        kind = "path";
-        why = "Configuration of smb-discovery.sh (above).";
-        replacedBy = "Nix (as above).";
-        caller = "n/a";
-      }
-      {
-        path = "build/sysroot/usr/lib/systemd/system/casaos-wsdd.service";
-        kind = "path";
-        why = "wsdd unit of the upstream installer (`/bin/bash`, PartOf=smbd).";
-        replacedBy = "services.samba-wsdd.";
-        caller = "n/a — never loaded (the module declares its own units)";
-      }
-      {
-        path = "route/v1.go: /v1/sys/{os,os/*,update,autoupdate,packages*,docker/containers,docker/update*,modules*,stop}";
-        kind = "pr";
-        why = "Host management through the API: OS upgrade (apt), release self-update (installer as root), automatic updates, apt and Docker package updates, optional modules (apt + archive download + unit enable), self-kill.";
-        replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): host-management routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts; module routes answered by the image provider (`[server] ModuleCatalogue` = root-owned store file from `services.recasaos.imageModules`: the modules of modules.env built into the image (virt); install = enable flag + unit start, no apt, no download; T15, T16). ReCasaOS/CasaOS#53, merged (v0.5.50).";
-        caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (ReCasaOS/CasaOS-UI#55); Modules page lists the image's modules. The `casaos module` CLI subcommand stays in the binary (root only, no API path; refuses an image catalogue)";
-      }
-      {
-        path = "pkg/telemetry: anonymous statistics (PostHog), on by default";
-        kind = "finding";
-        why = "Phone-home: a heartbeat every three hours with a box id.";
-        replacedBy = "recasanix-state-init writes /var/lib/casaos/telemetry-off on every boot; the core folds it into its state at start.";
-        caller = "TODO — the dashboard switch (GET/PUT /v1/sys/telemetry) can still turn it on until the next restart; decide: hide the switch or accept";
-      }
-      {
-        path = "${common}/shell/helper.sh: DockerImgMove, PackageDocker, SetLink, TarFolder, USB_Start_Auto, USB_Stop_Auto, EditSmabaUserPassword, AddSmabaUser, ReloadSamba";
-        kind = "patch";
-        why = "Functions that rewrite /etc/docker/daemon.json, stop docker, enable/disable devmon units, create host users with useradd/smbpasswd, call /etc/init.d/smbd, or delete symlinks under /DATA.";
-        replacedBy = "Nothing is needed: no caller. Docker runtime setup is cold-layer Nix (task 3.3); users and shares are hot state owned by the CasaOS services, not by host scripts.";
-        caller = "n/a — called from Go: GetDeviceTree, CatNetCardState, GetNetCard, GetTimeZone, GetSysInfo, RestartSMBD, MountCIFS only. Patch: patches/0001-helper-strip-host-management.patch";
-      }
-      {
-        path = "${common}/shell/{helper,usb-mount}.sh: absolute /bin/* paths";
-        kind = "patch";
-        why = "/bin/rm, /bin/rmdir, /bin/kill: NixOS has no /bin beyond sh. The prefix is deleted so the unit's PATH resolves the command (AGENTS.md §5).";
-        replacedBy = "systemd.services.casaos.path (task 3.1).";
-        caller = "n/a";
-      }
-      {
-        path = "CasaOS-Common utils/command OnlyExec; ${common}/shell/*.sh shebangs: /bin/bash";
-        kind = "pr";
-        why = "Absolute /bin/bash does not exist on NixOS: every helper.sh call (OnlyExec) and every script run by its shebang would fail.";
-        replacedBy = "OnlyExec runs `bash` from PATH (CasaOS-Common#6, merged, released in v0.4.31); shebangs of executed scripts `#!/usr/bin/env bash` (ReCasaOS/CasaOS#42, merged).";
-        caller = "n/a";
-      }
-      {
-        path = "route/v1/file.go, route/v2/file.go, route/v2.go: file API paths";
-        kind = "pr";
-        why = "Not host management — confinement: the core runs as root and its file API took any path, so a signed-in (or hijacked) session could read, write and delete anything: /etc, SSH host keys, Samba passdb, the user database on the state partition.";
-        replacedBy = "`[file] ManagementRoots` = services.recasaos.fileRoots (set by recasanix-state-init): pkg/fileroots, the boundary of EF's pkg/filesecurity ported (openat2 RESOLVE_BENEATH, roots pinned, fail closed); `/` lists only the way down. ReCasaOS/CasaOS#49, merged (v0.5.50); issue #48. Stage 2 (descriptor-relative operations) not ported.";
-        caller = "n/a — asserted by recasaos-boot (T2): /etc, /var/lib/casaos and `..` refused, /DATA allowed, `/` lists only DATA";
-      }
-      {
-        path = "route/*.go (all services): Authorization token lookup";
-        kind = "pr";
-        why = "Not host management — interoperability: every service took the whole Authorization value as the JWT, so the standard `Bearer <token>` (RFC 6750; OpenAPI `bearer`, curl `--oauth2-bearer`) was a 401. Bare token = CasaOS heritage, kept (owner decision 2026-10-23: tolerant reader, no breaking change).";
-        replacedBy = "CasaOS-Common `jwt.TokenFromAuthorization` (bare or `Bearer`, case-insensitive; other schemes untouched) (CasaOS-Common#7, released in v0.4.31) used by root, gateway, user service, app management, message bus virt module (and LocalStorage, not shipped). CasaOS#54, Gateway#3, UserService#7, AppManagement#18, MessageBus#6, VirtManagement#6, LocalStorage#6, merged (v0.5.50).";
-        caller = "n/a — the dashboard keeps sending the bare token";
-      }
-      {
-        path = "service/shares.go: smb.conf ownership, smbd restart on every share edit";
-        kind = "pr";
-        why = "The core moves and rewrites /etc/samba/smb.conf (a read-only store link on NixOS) and restarts smbd on every share change, dropping every session.";
-        replacedBy = "`[server] SambaMainConfig = external` (include-only: Nix owns smb.conf, the core writes and regenerates only smb.casa.conf at every start); share edits reload smbd and close only the edited shares (ReCasaOS/CasaOS#42; include-only: #55; both merged, v0.5.50). `smbd.service` is an alias of samba-smbd.service.";
-        caller = "yes — exercised by check smb-shares (T13)";
-      }
-      {
-        path = "main.go: command.ExecuteScripts(/etc/casaos/start.d)";
-        kind = "finding";
-        why = "Executes every script in /etc/casaos/start.d at startup — arbitrary code execution from a config directory. The one legitimate occupant is the UI's register-ui-events.sh (registers UI event types with the message bus; `#!/bin/sh`, needs curl and logger on the unit's PATH).";
-        replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4).";
-        caller = "TODO — kept deliberately (needed for UI events); vendor-owned and rebuilt each boot (task 3.2)";
-      }
-      {
-        path = "${common}/shell/usb-mount@.service, usr/lib/systemd/system/rclone.service";
-        kind = "finding";
-        why = "Upstream units the NixOS module does not define: the udev-triggered removable-media template hardcodes /casaOS/server/shell and /DATA/USB_Storage_*, and rclone backs cloud-drive mounting. Both stay in the sysroot as inert files.";
-        replacedBy = "rclone: dropped (cloud-drive mounting is not a product feature). Removable media: to be reinstated as a NixOS-native template unit and udev rule (deferred).";
-        caller = "TODO — until removable media is reinstated the UI's USB affordance is non-functional";
-      }
-      {
-        path = "cmd/migration-tool, cmd/message-bus-docgen";
-        kind = "finding";
-        why = "Each repo builds a migration-tool binary that drives systemctl on a Debian host.";
-        replacedBy = "Not built: derivations use explicit subPackages.";
-        caller = "n/a";
-      }
-    ];
+      ++ [
+        {
+          path = "${common}/shell/update.sh";
+          kind = "path";
+          why = "Upstream self-update entry point (curl the installer, run it as root).";
+          replacedBy = "Image/OTA pipeline (RAUC, later phase).";
+          caller = "yes — no Go code runs it; the update routes are absent in image-managed mode (below)";
+        }
+        {
+          path = "${common}/shell/smb-discovery.sh";
+          kind = "path";
+          why = "Installs and configures discovery on a Debian host (wsdd, avahi service files, smb.conf edits).";
+          replacedBy = "services.samba-wsdd + avahi + Samba with mDNS, declared in the NixOS module.";
+          caller = "n/a — run by the upstream installer only";
+        }
+        {
+          path = "build/sysroot/etc/casaos/smb-discovery.conf.sample";
+          kind = "path";
+          why = "Configuration of smb-discovery.sh (above).";
+          replacedBy = "Nix (as above).";
+          caller = "n/a";
+        }
+        {
+          path = "build/sysroot/usr/lib/systemd/system/casaos-wsdd.service";
+          kind = "path";
+          why = "wsdd unit of the upstream installer (`/bin/bash`, PartOf=smbd).";
+          replacedBy = "services.samba-wsdd.";
+          caller = "n/a — never loaded (the module declares its own units)";
+        }
+        {
+          path = "route/v1.go: /v1/sys/{os,os/*,update,autoupdate,packages*,docker/containers,docker/update*,modules*,stop}";
+          kind = "pr";
+          why = "Host management through the API: OS upgrade (apt), release self-update (installer as root), automatic updates, apt and Docker package updates, optional modules (apt + archive download + unit enable), self-kill.";
+          replacedBy = "`[server] ImageManaged = true` (set by recasanix-state-init): host-management routes not registered (404 = core without the feature → the dashboard shows none of it), no network version check, no auto-update loop, no new-release / OS-support alerts; module routes answered by the image provider (`[server] ModuleCatalogue` = root-owned store file from `services.recasaos.imageModules`: the modules of modules.env built into the image (virt); install = enable flag + unit start, no apt, no download; T15, T16). ReCasaOS/CasaOS#53, merged (v0.5.50).";
+          caller = "yes — UI: package row hidden, update row says 'Updated with the system image' (ReCasaOS/CasaOS-UI#55); Modules page lists the image's modules. The `casaos module` CLI subcommand stays in the binary (root only, no API path; refuses an image catalogue)";
+        }
+        {
+          path = "pkg/fleet: fleet master/member over a relay (tailscale up/down, systemctl start tailscaled)";
+          kind = "finding";
+          why = "Opt-in (dashboard): joins the box to a private network (tailscale against the ReCasaOS relay's Headscale) and starts tailscaled via systemctl — host networking from an API call. Direct mode (master address typed in) needs none of it.";
+          replacedBy = "Nothing: tailscale is not in the image nor on the unit's PATH → ErrNoPrivateNet, relay mode unavailable; direct mode works as upstream.";
+          caller = "TODO — owner: offer fleet at all? relay mode = tailscale in the cold layer (services.tailscale) if wanted";
+        }
+        {
+          path = "pkg/share, Gateway share listener: public sharing of an app through the relay";
+          kind = "finding";
+          why = "Opt-in per app (dashboard): an outbound tunnel to the ReCasaOS relay, ACME certificates by SNI in the gateway, the app reachable from the Internet. Not host management (no host config written), but new exposure.";
+          replacedBy = "Accepted for now (upstream behaviour, off until the owner shares an app).";
+          caller = "TODO — owner: keep, or hide on the appliance";
+        }
+        {
+          path = "pkg/telemetry: anonymous statistics (PostHog), on by default";
+          kind = "finding";
+          why = "Phone-home: a heartbeat every three hours with a box id.";
+          replacedBy = "recasanix-state-init writes /var/lib/casaos/telemetry-off on every boot; the core folds it into its state at start.";
+          caller = "TODO — the dashboard switch (GET/PUT /v1/sys/telemetry) can still turn it on until the next restart; decide: hide the switch or accept";
+        }
+        {
+          path = "${common}/shell/helper.sh: DockerImgMove, PackageDocker, SetLink, TarFolder, USB_Start_Auto, USB_Stop_Auto, EditSmabaUserPassword, AddSmabaUser, ReloadSamba";
+          kind = "patch";
+          why = "Functions that rewrite /etc/docker/daemon.json, stop docker, enable/disable devmon units, create host users with useradd/smbpasswd, call /etc/init.d/smbd, or delete symlinks under /DATA.";
+          replacedBy = "Nothing is needed: no caller. Docker runtime setup is cold-layer Nix (task 3.3); users and shares are hot state owned by the CasaOS services, not by host scripts.";
+          caller = "n/a — called from Go: GetDeviceTree, CatNetCardState, GetNetCard, GetTimeZone, GetSysInfo, RestartSMBD, MountCIFS only. Patch: patches/0001-helper-strip-host-management.patch";
+        }
+        {
+          path = "${common}/shell/helper.sh: absolute /bin/* paths";
+          kind = "patch";
+          why = "/bin/rm, /bin/rmdir, /bin/kill: NixOS has no /bin beyond sh. The prefix is deleted so the unit's PATH resolves the command (AGENTS.md §5).";
+          replacedBy = "systemd.services.casaos.path (task 3.1).";
+          caller = "n/a";
+        }
+        {
+          path = "CasaOS-Common utils/command OnlyExec; ${common}/shell/*.sh shebangs: /bin/bash";
+          kind = "pr";
+          why = "Absolute /bin/bash does not exist on NixOS: every helper.sh call (OnlyExec) and every script run by its shebang would fail.";
+          replacedBy = "OnlyExec runs `bash` from PATH (CasaOS-Common#6, merged, released in v0.4.31); shebangs of executed scripts `#!/usr/bin/env bash` (ReCasaOS/CasaOS#42, merged).";
+          caller = "n/a";
+        }
+        {
+          path = "route/v1/file.go, route/v2/file.go, route/v2.go: file API paths";
+          kind = "pr";
+          why = "Not host management — confinement: the core runs as root and its file API took any path, so a signed-in (or hijacked) session could read, write and delete anything: /etc, SSH host keys, Samba passdb, the user database on the state partition.";
+          replacedBy = "`[file] ManagementRoots` = services.recasaos.fileRoots (set by recasanix-state-init): pkg/fileroots, the boundary of EF's pkg/filesecurity ported (openat2 RESOLVE_BENEATH, roots pinned, fail closed); `/` lists only the way down. ReCasaOS/CasaOS#49, merged (v0.5.50); issue #48. Stage 2 (descriptor-relative operations) not ported.";
+          caller = "n/a — asserted by recasaos-boot (T2): /etc, /var/lib/casaos and `..` refused, /DATA allowed, `/` lists only DATA";
+        }
+        {
+          path = "route/*.go (all services): Authorization token lookup";
+          kind = "pr";
+          why = "Not host management — interoperability: every service took the whole Authorization value as the JWT, so the standard `Bearer <token>` (RFC 6750; OpenAPI `bearer`, curl `--oauth2-bearer`) was a 401. Bare token = CasaOS heritage, kept (owner decision 2026-10-23: tolerant reader, no breaking change).";
+          replacedBy = "CasaOS-Common `jwt.TokenFromAuthorization` (bare or `Bearer`, case-insensitive; other schemes untouched) (CasaOS-Common#7, released in v0.4.31) used by root, gateway, user service, app management, message bus virt module (and LocalStorage, not shipped). CasaOS#54, Gateway#3, UserService#7, AppManagement#18, MessageBus#6, VirtManagement#6, LocalStorage#6, merged (v0.5.50).";
+          caller = "n/a — the dashboard keeps sending the bare token";
+        }
+        {
+          path = "service/shares.go: smb.conf ownership, smbd restart on every share edit";
+          kind = "pr";
+          why = "The core moves and rewrites /etc/samba/smb.conf (a read-only store link on NixOS) and restarts smbd on every share change, dropping every session.";
+          replacedBy = "`[server] SambaMainConfig = external` (include-only: Nix owns smb.conf, the core writes and regenerates only smb.casa.conf at every start); share edits reload smbd and close only the edited shares (ReCasaOS/CasaOS#42; include-only: #55; both merged, v0.5.50). `smbd.service` is an alias of samba-smbd.service.";
+          caller = "yes — exercised by check smb-shares (T13)";
+        }
+        {
+          path = "main.go: command.ExecuteScripts(/etc/casaos/start.d)";
+          kind = "finding";
+          why = "Executes every script in /etc/casaos/start.d at startup — arbitrary code execution from a config directory. The one legitimate occupant is the UI's register-ui-events.sh (registers UI event types with the message bus; `#!/bin/sh`, needs curl and logger on the unit's PATH).";
+          replacedBy = "T9 asserts the shipped start.d holds only register-ui-events.sh; recasanix-state-init rebuilds it on every boot, so a persistent tamper cannot survive (T4).";
+          caller = "TODO — kept deliberately (needed for UI events); vendor-owned and rebuilt each boot (task 3.2)";
+        }
+        {
+          path = "usr/lib/systemd/system/rclone.service";
+          kind = "finding";
+          why = "Upstream unit the NixOS module does not define: rclone backs cloud-drive mounting. Stays in the sysroot as an inert file. (usb-mount@.service + usb-mount.sh, the removable-media template: removed upstream, v0.5.135.)";
+          replacedBy = "rclone: dropped (cloud-drive mounting is not a product feature). Removable media: to be reinstated as a NixOS-native template unit and udev rule (deferred).";
+          caller = "TODO — until removable media is reinstated the UI's USB affordance is non-functional";
+        }
+        {
+          path = "cmd/migration-tool, cmd/message-bus-docgen";
+          kind = "finding";
+          why = "Each repo builds a migration-tool binary that drives systemctl on a Debian host.";
+          replacedBy = "Not built: derivations use explicit subPackages.";
+          caller = "n/a";
+        }
+      ];
     # a module (release/modules.env): built into the image, enabled per box (CasaOS image provider)
     casaos-virt-management = [
       {

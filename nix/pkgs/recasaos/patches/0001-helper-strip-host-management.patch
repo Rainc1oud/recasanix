@@ -153,30 +153,3 @@ index 6e33a9b..d31572b 100644
  
  # $1:username $2:host $3:share $4:port $5:mountpoint $6:password 
  MountCIFS(){
-diff --git a/build/sysroot/usr/share/casaos/shell/usb-mount.sh b/build/sysroot/usr/share/casaos/shell/usb-mount.sh
-index 71f2105..0a9b435 100644
---- a/build/sysroot/usr/share/casaos/shell/usb-mount.sh
-+++ b/build/sysroot/usr/share/casaos/shell/usb-mount.sh
-@@ -101,7 +101,7 @@ do_mount() {
-     mount -t iso9660 ${DEVICE} ${MOUNT_POINT}
-     ;;
-   *)
--    /bin/rmdir "${MOUNT_POINT}"
-+    rmdir "${MOUNT_POINT}"
-     exit 0
-     ;;
-   esac
-@@ -112,11 +112,11 @@ do_umount() {
-   if [[ -z ${MOUNT_POINT} ]]; then
-     ${log} "Warning: ${DEVICE} is not mounted"
-   else
--    #/bin/kill -9 $(lsof ${MOUNT_POINT})
-+    #kill -9 $(lsof ${MOUNT_POINT})
-     umount -l ${DEVICE}
-     ${log} "Unmounted ${DEVICE} from ${MOUNT_POINT}"
-     if [ "`ls -A ${MOUNT_POINT}`" = "" ]; then
--      /bin/rm -fr "${MOUNT_POINT}"
-+      rm -fr "${MOUNT_POINT}"
-     fi
-     sed -i.bak "\@${MOUNT_POINT}@d" /var/log/usb-mount.track
-   fi
